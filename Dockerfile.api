@@ -29,7 +29,8 @@ RUN npx prisma generate
 
 # Build the API
 WORKDIR /app
-RUN npx nx build monitoring-api --configuration=production
+RUN npx nx sync --verbose || true
+RUN npx nx build monitoring-api --configuration=production --skip-nx-cache
 
 # Production stage
 FROM node:20-alpine AS production
