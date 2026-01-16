@@ -23,8 +23,9 @@ RUN npm ci --legacy-peer-deps
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000/api
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
-# Build the Web app
-RUN npx nx build monitoring-web --configuration=production
+# Sync workspace and build the Web app
+RUN npx nx sync --verbose || true
+RUN npx nx build monitoring-web --configuration=production --skip-nx-cache
 
 # Production stage
 FROM node:20-alpine AS production
