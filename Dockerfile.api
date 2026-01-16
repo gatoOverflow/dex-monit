@@ -9,6 +9,9 @@ ARG CACHE_BUST=v3
 # Build stage
 FROM node:20-alpine AS builder
 
+# Install OpenSSL 1.1 compatibility for Prisma
+RUN apk add --no-cache openssl1.1-compat
+
 WORKDIR /app
 
 # Install dependencies first (better caching)
@@ -34,6 +37,9 @@ RUN npx nx build monitoring-api --configuration=production --skip-nx-cache
 
 # Production stage
 FROM node:20-alpine AS production
+
+# Install OpenSSL 1.1 compatibility for Prisma
+RUN apk add --no-cache openssl1.1-compat
 
 WORKDIR /app
 
