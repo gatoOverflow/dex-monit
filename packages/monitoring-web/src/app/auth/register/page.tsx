@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff, Zap, ArrowRight, Loader2, Check } from 'lucide-react';
+import { Eye, EyeOff, Zap, ArrowRight, Loader2, Check, Lock } from 'lucide-react';
 import { authApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+// Check if registration is enabled (default: false for security)
+const REGISTRATION_ENABLED = process.env.NEXT_PUBLIC_REGISTRATION_ENABLED === 'true';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -17,6 +20,29 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // If registration is disabled, show message
+  if (!REGISTRATION_ENABLED) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="mx-auto max-w-md text-center p-8">
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10">
+            <Lock className="h-8 w-8 text-yellow-500" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Registration Disabled</h1>
+          <p className="text-muted-foreground mb-6">
+            New account registration is currently disabled. Please contact an administrator if you need access.
+          </p>
+          <Link href="/auth/login">
+            <Button className="gap-2">
+              Go to Login
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

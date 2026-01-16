@@ -23,6 +23,10 @@ RUN npm ci --legacy-peer-deps
 ARG NEXT_PUBLIC_API_URL=https://monit-api.cloud.dexchange.group/api
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
+# Registration control - set to 'true' to enable registration
+ARG NEXT_PUBLIC_REGISTRATION_ENABLED=false
+ENV NEXT_PUBLIC_REGISTRATION_ENABLED=${NEXT_PUBLIC_REGISTRATION_ENABLED}
+
 # Sync workspace and build the Web app
 RUN npx nx sync --verbose || true
 RUN npx nx build monitoring-web --configuration=production --skip-nx-cache
