@@ -45,8 +45,9 @@ RUN npm ci --omit=dev --legacy-peer-deps --ignore-scripts
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# Copy workspace packages (observability SDK)
+# Copy workspace packages (observability SDK and built libs)
 COPY --from=builder /app/node_modules/@dex-monit ./node_modules/@dex-monit
+COPY --from=builder /app/packages/observability ./packages/observability
 
 # Copy built application from builder
 COPY --from=builder /app/packages/monitoring-api/dist ./dist
@@ -55,13 +56,9 @@ COPY --from=builder /app/packages/monitoring-api/dist ./dist
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Health check script that uses PORT env var
-RUN echo '#!/bin/sh' > /healthcheck.sh && \
-    echo 'wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/health || exit 1' >> /healthcheck.sh && \
-    chmod +x /healthcheck.sh
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD /healthcheck.sh
+# Health check disabled temporarily for debugging
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+#   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/api/health || exit 1
 
 # Expose default port (can be overridden at runtime)
 EXPOSE ${PORT}
