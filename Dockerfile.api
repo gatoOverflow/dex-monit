@@ -45,6 +45,9 @@ RUN npm ci --omit=dev --legacy-peer-deps --ignore-scripts
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
+# Copy workspace packages (observability SDK)
+COPY --from=builder /app/node_modules/@dex-monit ./node_modules/@dex-monit
+
 # Copy built application from builder
 COPY --from=builder /app/packages/monitoring-api/dist ./dist
 
