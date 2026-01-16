@@ -46,7 +46,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copy built application from builder
-COPY --from=builder /app/dist/packages/monitoring-api ./dist
+COPY --from=builder /app/packages/monitoring-api/dist ./dist
 
 # Environment
 ENV NODE_ENV=production
