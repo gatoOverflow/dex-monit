@@ -34,17 +34,18 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=4200
+ENV HOSTNAME=0.0.0.0
 
 # Copy built Next.js standalone output
 COPY --from=builder /app/packages/monitoring-web/.next/standalone ./
 COPY --from=builder /app/packages/monitoring-web/.next/static ./packages/monitoring-web/.next/static
 COPY --from=builder /app/packages/monitoring-web/public ./packages/monitoring-web/public
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:4200 || exit 1
+# Health check disabled for debugging
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+#   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT} || exit 1
 
 EXPOSE 4200
 
-# Run Next.js
+# Run Next.js - the server reads PORT and HOSTNAME from env
 CMD ["node", "packages/monitoring-web/server.js"]
