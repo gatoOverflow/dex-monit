@@ -1,0 +1,602 @@
+// Dex Monit - Observability Platform Database Schema
+// PostgreSQL with Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  avatarUrl     String?
+  role          UserRole  @default(MEMBER)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  teamMemberships TeamMember[]
+  assignedIssues  Issue[]        @relation("AssignedIssues")
+  comments        IssueComment[]
+  activities      Activity[]
+  alertsSent      Alert[]
+  apiKeys         ApiKey[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  userAgent    String?
+  ipAddress    String?
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+// ============================================
+// TEAMS & PERMISSIONS
+// ============================================
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  members  TeamMember[]
+  projects Project[]
+  settings TeamSettings?
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String         @id @default(cuid())
+  teamId    String
+  userId    String
+  role      TeamMemberRole @default(MEMBER)
+  createdAt DateTime       @default(now())
+
+  // Relations
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+enum TeamMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ============================================
+// PROJECTS
+// ============================================
+
+model Project {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String
+  platform    String          @default("node")
+  description String?
+  teamId      String
+  settings    Json            @default("{}")
+  status      ProjectStatus   @default(ACTIVE)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Relations
+  team       Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  apiKeys    ApiKey[]
+  issues     Issue[]
+  events     Event[]
+  logs       Log[]
+  releases   Release[]
+  sourceMaps SourceMap[]
+  alertRules AlertRule[]
+  httpTraces HttpTrace[]
+
+  @@unique([teamId, slug])
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  DISABLED
+}
+
+model ApiKey {
+  id          String      @id @default(cuid())
+  projectId   String
+  name        String
+  keyHash     String      @unique
+  keyPrefix   String      // First 8 chars for display (dex_xxxxx...)
+  type        ApiKeyType  @default(DSN)
+  scopes      String[]    @default(["ingest"])
+  isActive    Boolean     @default(true)
+  lastUsedAt  DateTime?
+  createdById String?
+  createdAt   DateTime    @default(now())
+  expiresAt   DateTime?
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id])
+
+  @@index([keyHash])
+  @@index([projectId])
+  @@map("api_keys")
+}
+
+enum ApiKeyType {
+  DSN       // Data Source Name - for SDKs
+  API       // API access - for programmatic access
+  INTERNAL  // Internal use
+}
+
+// ============================================
+// RELEASES & SOURCE MAPS
+// ============================================
+
+model Release {
+  id          String    @id @default(cuid())
+  projectId   String
+  version     String
+  environment String    @default("production")
+  commitHash  String?
+  commitUrl   String?
+  deployedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceMaps SourceMap[]
+  events     Event[]
+
+  @@unique([projectId, version, environment])
+  @@map("releases")
+}
+
+model SourceMap {
+  id          String   @id @default(cuid())
+  projectId   String
+  releaseId   String?
+  filename    String   // e.g., "main.js"
+  sourceMapUrl String  // URL or path to source map
+  fileHash    String   // Hash of the minified file
+  uploadedAt  DateTime @default(now())
+
+  // Relations
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  release Release? @relation(fields: [releaseId], references: [id])
+
+  @@unique([projectId, filename, fileHash])
+  @@map("source_maps")
+}
+
+// ============================================
+// ISSUES (Grouped Errors)
+// ============================================
+
+model Issue {
+  id              String      @id @default(cuid())
+  shortId         String      @unique // DEX-1234
+  projectId       String
+  title           String
+  culprit         String?     // File/function where error originated
+  level           Severity    @default(ERROR)
+  status          IssueStatus @default(UNRESOLVED)
+  platform        String      @default("node")
+  fingerprint     String[]    // For grouping
+  fingerprintHash String      // Hash of fingerprint for indexing
+  
+  // Metadata
+  metadata        Json        @default("{}")
+  tags            Json        @default("{}")
+  
+  // Statistics
+  eventCount      Int         @default(0)
+  userCount       Int         @default(0)
+  
+  // Timestamps
+  firstSeen       DateTime    @default(now())
+  lastSeen        DateTime    @default(now())
+  resolvedAt      DateTime?
+  
+  // Assignment
+  assignedToId    String?
+  
+  // Ignore rules
+  isIgnored       Boolean     @default(false)
+  ignoreUntil     DateTime?
+  ignoreReason    String?
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo User?          @relation("AssignedIssues", fields: [assignedToId], references: [id])
+  events     Event[]
+  alerts     Alert[]
+  // Note: comments and activities now reference ClickHouse issues (no FK)
+
+  @@unique([projectId, fingerprintHash])
+  @@index([projectId, status])
+  @@index([projectId, lastSeen])
+  @@index([shortId])
+  @@map("issues")
+}
+
+enum IssueStatus {
+  UNRESOLVED
+  RESOLVED
+  IGNORED
+  ARCHIVED
+}
+
+enum Severity {
+  DEBUG
+  INFO
+  WARNING
+  ERROR
+  FATAL
+}
+
+model IssueComment {
+  id        String   @id @default(cuid())
+  issueId   String   // Reference to ClickHouse issue (no FK constraint)
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (issueId references ClickHouse, no FK)
+  author User  @relation(fields: [authorId], references: [id])
+
+  @@index([issueId])
+  @@map("issue_comments")
+}
+
+// ============================================
+// EVENTS (Individual Error Occurrences)
+// ============================================
+
+model Event {
+  id            String   @id @default(cuid())
+  eventId       String   @unique // UUID from SDK
+  projectId     String
+  issueId       String
+  releaseId     String?
+  
+  // Error details
+  message       String
+  level         Severity @default(ERROR)
+  platform      String   @default("node")
+  environment   String   @default("production")
+  serverName    String?
+  
+  // Exception data
+  exceptionType  String?
+  exceptionValue String?
+  stacktrace     Json?    // Full stacktrace as JSON
+  
+  // Context
+  contexts      Json     @default("{}") // runtime, os, browser, etc.
+  tags          Json     @default("{}")
+  extra         Json     @default("{}")
+  breadcrumbs   Json     @default("[]")
+  
+  // Request context
+  requestUrl    String?
+  requestMethod String?
+  requestData   Json?
+  
+  // User context
+  userId        String?  // User ID from the app (not our user)
+  userEmail     String?
+  userIp        String?
+  
+  // Tracing
+  requestId     String?
+  transactionId String?
+  
+  // SDK info
+  sdkName       String?
+  sdkVersion    String?
+  
+  // Timestamps
+  timestamp     DateTime @default(now())
+  receivedAt    DateTime @default(now())
+
+  // Relations
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issue   Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  release Release? @relation(fields: [releaseId], references: [id])
+
+  @@index([projectId, timestamp])
+  @@index([issueId, timestamp])
+  @@index([requestId])
+  @@index([transactionId])
+  @@index([eventId])
+  @@map("events")
+}
+
+// ============================================
+// LOGS
+// ============================================
+
+model Log {
+  id            String   @id @default(cuid())
+  projectId     String
+  
+  // Log content
+  level         Severity @default(INFO)
+  message       String
+  
+  // Context
+  environment   String   @default("production")
+  serverName    String?
+  serviceName   String?
+  
+  // Structured data
+  data          Json     @default("{}")
+  tags          Json     @default("{}")
+  
+  // Tracing correlation
+  requestId     String?
+  transactionId String?
+  spanId        String?
+  
+  // Timestamps
+  timestamp     DateTime @default(now())
+  receivedAt    DateTime @default(now())
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+  @@index([projectId, level, timestamp])
+  @@index([requestId])
+  @@index([transactionId])
+  @@map("logs")
+}
+
+// ============================================
+// ALERTS
+// ============================================
+
+model AlertRule {
+  id           String          @id @default(cuid())
+  projectId    String
+  name         String
+  description  String?
+  isEnabled    Boolean         @default(true)
+  
+  // Trigger conditions
+  triggerType  AlertTriggerType
+  conditions   Json            // Flexible conditions as JSON
+  
+  // Thresholds
+  threshold    Int             @default(1)
+  timeWindow   Int             @default(60) // seconds
+  
+  // Filters
+  environment  String?
+  level        Severity?
+  
+  // Actions
+  actions      Json            @default("[]") // Array of action configs
+  
+  // Rate limiting
+  cooldownMinutes Int          @default(30)
+  lastTriggeredAt DateTime?
+  
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  alerts  Alert[]
+
+  @@map("alert_rules")
+}
+
+enum AlertTriggerType {
+  NEW_ISSUE           // First occurrence of an issue
+  ISSUE_REGRESSION    // Resolved issue reappears
+  THRESHOLD           // X events in Y time
+  SPIKE               // Unusual increase in errors
+  CUSTOM              // Custom conditions
+}
+
+model Alert {
+  id          String      @id @default(cuid())
+  alertRuleId String
+  issueId     String?
+  
+  // Alert details
+  status      AlertStatus @default(TRIGGERED)
+  title       String
+  message     String
+  
+  // Delivery
+  deliveredAt DateTime?
+  deliveryChannel String?  // slack, email, webhook
+  deliveryStatus String?
+  
+  // Resolution
+  resolvedAt  DateTime?
+  resolvedById String?
+  
+  triggeredAt DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+
+  // Relations
+  alertRule  AlertRule @relation(fields: [alertRuleId], references: [id], onDelete: Cascade)
+  issue      Issue?    @relation(fields: [issueId], references: [id])
+  resolvedBy User?     @relation(fields: [resolvedById], references: [id])
+
+  @@index([alertRuleId, triggeredAt])
+  @@map("alerts")
+}
+
+enum AlertStatus {
+  TRIGGERED
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+// ============================================
+// INTEGRATIONS
+// ============================================
+
+model Integration {
+  id          String          @id @default(cuid())
+  teamId      String
+  type        IntegrationType
+  name        String
+  config      Json            @default("{}") // Encrypted config
+  isEnabled   Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([teamId, type])
+  @@map("integrations")
+}
+
+enum IntegrationType {
+  SLACK
+  DISCORD
+  TEAMS
+  EMAIL
+  WEBHOOK
+  JIRA
+  LINEAR
+  GITHUB
+  PAGERDUTY
+}
+
+// ============================================
+// ACTIVITY LOG
+// ============================================
+
+model Activity {
+  id        String       @id @default(cuid())
+  issueId   String?      // Reference to ClickHouse issue (no FK constraint)
+  userId    String?
+  type      ActivityType
+  data      Json         @default("{}")
+  createdAt DateTime     @default(now())
+
+  // Relations (issueId references ClickHouse, no FK)
+  user  User?  @relation(fields: [userId], references: [id])
+
+  @@index([issueId, createdAt])
+  @@map("activities")
+}
+
+enum ActivityType {
+  ISSUE_CREATED
+  ISSUE_RESOLVED
+  ISSUE_REOPENED
+  ISSUE_IGNORED
+  ISSUE_UNIGNORED
+  ISSUE_ASSIGNED
+  ISSUE_UNASSIGNED
+  ISSUE_MERGED
+  COMMENT_ADDED
+  STATUS_CHANGED
+}
+
+// ============================================
+// HTTP TRACES (Performance Monitoring)
+// ============================================
+
+model HttpTrace {
+  id            String   @id @default(cuid())
+  projectId     String
+  traceId       String   @unique // External trace ID from SDK
+  timestamp     DateTime @default(now())
+  method        String   // GET, POST, PUT, DELETE, etc.
+  url           String
+  path          String
+  statusCode    Int
+  duration      Int      // milliseconds
+  ip            String?
+  userAgent     String?
+  referer       String?
+  contentType   String?
+  contentLength Int?
+  responseSize  Int?
+  requestId     String?
+  transactionId String?
+  userId        String?
+  error         String?
+  query         Json?    @default("{}")
+  params        Json?    @default("{}")
+  headers       Json?    @default("{}")
+  environment   String   @default("production")
+  serverName    String?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+  @@index([projectId, statusCode])
+  @@index([projectId, path])
+  @@index([requestId])
+  @@map("http_traces")
+}
+
+// ============================================
+// TEAM SETTINGS (Integrations)
+// ============================================
+
+model TeamSettings {
+  id            String   @id @default(cuid())
+  teamId        String   @unique
+  slackConfig   Json?    // { webhookUrl, channel, enabled }
+  emailConfig   Json?    // { smtpHost, smtpPort, smtpUser, smtpPassword, fromEmail, fromName, enabled }
+  webhookConfig Json?    // { url, secret, headers, enabled }
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("team_settings")
+}

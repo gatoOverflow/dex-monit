@@ -1,0 +1,35 @@
+{
+  "name": "@dex-monit/observability-scrubber",
+  "version": "1.0.0",
+  "description": "Utility to scrub sensitive data from objects before logging",
+  "keywords": ["observability", "scrubber", "security", "logging", "pii"],
+  "author": "Dex Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dex/dex-monit.git",
+    "directory": "packages/observability/scrubber"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "nx": {
+    "name": "scrubber"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

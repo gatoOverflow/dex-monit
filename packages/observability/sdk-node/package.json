@@ -1,0 +1,52 @@
+{
+  "name": "@dex-monit/observability-sdk-node",
+  "version": "1.0.13",
+  "description": "NestJS SDK for Dex Monitoring - Error tracking and log management",
+  "keywords": [
+    "observability",
+    "monitoring",
+    "nestjs",
+    "error-tracking",
+    "logging",
+    "sentry-alternative"
+  ],
+  "author": "Dex Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dex/dex-monit.git",
+    "directory": "packages/observability/sdk-node"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "nx": {
+    "name": "sdk-node"
+  },
+  "dependencies": {
+    "@dex-monit/observability-contracts": "^1.0.0",
+    "@dex-monit/observability-logger": "^1.0.0",
+    "@dex-monit/observability-request-context": "^1.0.0",
+    "@dex-monit/observability-scrubber": "^1.0.0",
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "@nestjs/core": "^10.0.0 || ^11.0.0",
+    "rxjs": "^7.0.0 || ^8.0.0",
+    "uuid": "^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0"
+  }
+}

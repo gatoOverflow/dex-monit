@@ -1,0 +1,149 @@
+# ============================================
+# DEX-MONIT - Production Docker Compose
+# For Dokploy deployment
+# ============================================
+
+version: '3.8'
+
+services:
+  # ============================================
+  # Backend API
+  # ============================================
+  monitoring-api:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: dex-monit-api
+    restart: unless-stopped
+    ports:
+      - '${API_PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Database
+      DATABASE_URL: ${DATABASE_URL}
+      # ClickHouse
+      CLICKHOUSE_ENABLED: ${CLICKHOUSE_ENABLED:-true}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8443}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-dex_monitoring}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_PROTOCOL: ${CLICKHOUSE_PROTOCOL:-https}
+      # Redis
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # App
+      APP_URL: ${APP_URL:-https://api.dex-monit.com}
+      FRONTEND_URL: ${FRONTEND_URL:-https://dex-monit.com}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3000/api/health',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dex-monit-network
+    depends_on:
+      - redis
+
+  # ============================================
+  # Frontend Web
+  # ============================================
+  monitoring-web:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dex-monit.com/api}
+    container_name: dex-monit-web
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-4200}:4200'
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.dex-monit.com/api}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:4200',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - dex-monit-network
+    depends_on:
+      - monitoring-api
+
+  # ============================================
+  # Redis (Cache & Queues)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: dex-monit-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    ports:
+      - '${REDIS_EXTERNAL_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dex-monit-network
+
+  # ============================================
+  # PostgreSQL (Optional - if not using external)
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: dex-monit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-dex_monitoring}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '${POSTGRES_EXTERNAL_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-dex}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dex-monit-network
+    profiles:
+      - with-postgres
+
+networks:
+  dex-monit-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:

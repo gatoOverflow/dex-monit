@@ -1,0 +1,169 @@
+============================================
+DEX-MONIT - Dokploy Deployment Guide
+============================================
+
+📋 PREREQUISITES
+================
+- Dokploy installed and accessible
+- PostgreSQL database (external or Dokploy managed)
+- ClickHouse database (external - e.g., Dokploy)
+- Redis (included in docker-compose or external)
+
+🚀 DEPLOYMENT STEPS
+===================
+
+1. CREATE SERVICES IN DOKPLOY
+-----------------------------
+
+A) PostgreSQL (si pas déjà configuré)
+   - Type: Database > PostgreSQL
+   - Name: dex-monit-postgres
+   - Database: dex_monitoring
+
+B) Redis
+   - Type: Database > Redis
+   - Name: dex-monit-redis
+
+C) API Backend
+   - Type: Application > Docker
+   - Name: dex-monit-api
+   - Repository: [votre repo git]
+   - Dockerfile: infra/docker/Dockerfile.api
+   - Port: 3000
+
+D) Web Frontend
+   - Type: Application > Docker
+   - Name: dex-monit-web
+   - Repository: [votre repo git]
+   - Dockerfile: infra/docker/Dockerfile.web
+   - Build Args:
+     - NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api
+   - Port: 4200
+
+
+2. CONFIGURE ENVIRONMENT VARIABLES
+----------------------------------
+
+Pour API (dex-monit-api):
+
+DATABASE_URL=postgresql://user:password@postgres-host:5432/dex_monitoring
+JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+JWT_EXPIRES_IN=7d
+
+CLICKHOUSE_ENABLED=true
+CLICKHOUSE_HOST=your-clickhouse-host.traefik.me
+CLICKHOUSE_PORT=8443
+CLICKHOUSE_DATABASE=dex_monitoring
+CLICKHOUSE_USER=default
+CLICKHOUSE_PASSWORD=your-clickhouse-password
+CLICKHOUSE_PROTOCOL=https
+
+REDIS_ENABLED=true
+REDIS_URL=redis://redis-host:6379
+ASYNC_INGESTION=true
+
+APP_URL=https://api.yourdomain.com
+FRONTEND_URL=https://yourdomain.com
+
+Pour Web (dex-monit-web):
+
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api
+
+
+3. CONFIGURE DOMAINS
+--------------------
+
+API:
+  - Domain: api.yourdomain.com
+  - Port: 3000
+  - HTTPS: Enabled
+
+Web:
+  - Domain: yourdomain.com or app.yourdomain.com
+  - Port: 4200
+  - HTTPS: Enabled
+
+
+4. DEPLOY
+---------
+
+Dans Dokploy:
+1. Deploy API first
+2. Wait for API to be healthy (check /api/health)
+3. Deploy Web
+4. Test login at yourdomain.com
+
+
+5. FIRST TIME SETUP
+-------------------
+
+A) Run database migrations:
+   Via Dokploy terminal in dex-monit-api:
+   $ npx prisma db push
+
+B) Create first admin user:
+   Use the API endpoint POST /api/auth/register
+
+
+6. HEALTH CHECKS
+----------------
+
+API Endpoints:
+- /api/health      - Full health check with service status
+- /api/health/live - Simple liveness check
+- /api/health/ready - Database readiness check
+
+
+7. MONITORING THE DEPLOYMENT
+----------------------------
+
+Logs:
+- Check Dokploy logs for each service
+- API logs in JSON format
+
+Metrics:
+- /api/health shows service latencies
+- ClickHouse stores time-series data
+
+
+============================================
+QUICK REFERENCE - Environment Variables
+============================================
+
+REQUIRED:
+---------
+DATABASE_URL          PostgreSQL connection string
+JWT_SECRET            Min 32 characters
+CLICKHOUSE_HOST       ClickHouse server hostname
+CLICKHOUSE_PASSWORD   ClickHouse password
+NEXT_PUBLIC_API_URL   Full API URL (for frontend)
+
+OPTIONAL:
+---------
+REDIS_ENABLED         Enable Redis (default: false)
+ASYNC_INGESTION       Enable async queues (default: false)
+LOG_LEVEL             debug|info|warn|error (default: info)
+
+
+============================================
+TROUBLESHOOTING
+============================================
+
+1. API won't start:
+   - Check DATABASE_URL is correct
+   - Verify PostgreSQL is accessible
+   - Check logs for Prisma errors
+
+2. ClickHouse errors:
+   - Verify CLICKHOUSE_HOST is accessible
+   - Check credentials
+   - Ensure CLICKHOUSE_PROTOCOL matches (http/https)
+
+3. Frontend can't connect:
+   - Verify NEXT_PUBLIC_API_URL is correct
+   - Check CORS settings in API
+   - Ensure API is running and healthy
+
+4. Authentication issues:
+   - Verify JWT_SECRET is the same across deployments
+   - Check token expiration (JWT_EXPIRES_IN)

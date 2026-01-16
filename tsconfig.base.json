@@ -16,6 +16,14 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",
-    "customConditions": ["@dex-monit/source"]
+    "customConditions": ["@dex-monit/source"],
+    "baseUrl": ".",
+    "paths": {
+      "@dex-monit/observability-contracts": ["packages/observability/contracts/src/index.ts"],
+      "@dex-monit/observability-request-context": ["packages/observability/request-context/src/index.ts"],
+      "@dex-monit/observability-scrubber": ["packages/observability/scrubber/src/index.ts"],
+      "@dex-monit/observability-logger": ["packages/observability/logger/src/index.ts"],
+      "@dex-monit/observability-sdk-node": ["packages/observability/sdk-node/src/index.ts"]
+    }
   }
 }

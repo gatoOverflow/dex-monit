@@ -1,0 +1,369 @@
+import { Injectable, OnModuleInit, OnModuleDestroy, Inject, Logger as NestLogger } from '@nestjs/common';
+import { createClient, ClickHouseClient } from '@clickhouse/client';
+import { Logger } from '@dex-monit/observability-logger';
+
+// Check if ClickHouse is enabled
+const CLICKHOUSE_ENABLED = process.env['CLICKHOUSE_ENABLED'] === 'true';
+
+@Injectable()
+export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
+  private client: ClickHouseClient | null = null;
+  private connected = false;
+  private readonly nestLogger = new NestLogger('ClickHouseService');
+
+  constructor(@Inject(Logger) private readonly logger: Logger) {}
+
+  async onModuleInit() {
+    if (!CLICKHOUSE_ENABLED) {
+      this.nestLogger.warn('ClickHouse disabled (set CLICKHOUSE_ENABLED=true to enable)');
+      return;
+    }
+
+    try {
+      this.client = createClient({
+        host: process.env['CLICKHOUSE_HOST'] || 'http://localhost:8123',
+        username: process.env['CLICKHOUSE_USER'] || 'default',
+        password: process.env['CLICKHOUSE_PASSWORD'] || '',
+        database: process.env['CLICKHOUSE_DATABASE'] || 'dex_monitoring',
+      });
+
+      await this.initializeSchema();
+      this.connected = true;
+      this.logger.info('ClickHouse connected and schema initialized');
+    } catch (error) {
+      this.nestLogger.warn(`Failed to connect to ClickHouse: ${error instanceof Error ? error.message : error}`);
+      this.nestLogger.warn('Continuing without ClickHouse (time-series storage disabled)');
+      this.client = null;
+    }
+  }
+
+  async onModuleDestroy() {
+    if (this.client) {
+      await this.client.close().catch(() => {});
+    }
+  }
+
+  isConnected(): boolean {
+    return this.connected && this.client !== null;
+  }
+
+  isEnabled(): boolean {
+    return CLICKHOUSE_ENABLED;
+  }
+
+  getClient(): ClickHouseClient | null {
+    return this.client;
+  }
+
+  /**
+   * Initialize ClickHouse tables optimized for time-series data
+   */
+  private async initializeSchema() {
+    if (!this.client) return;
+
+    // Create database if not exists
+    await this.client.command({
+      query: `CREATE DATABASE IF NOT EXISTS dex_monitoring`,
+    });
+
+    // Events table - MergeTree optimized for time-series
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.events (
+          id UUID DEFAULT generateUUIDv4(),
+          project_id String,
+          event_id String,
+          timestamp DateTime64(3),
+          received_at DateTime64(3) DEFAULT now64(3),
+          
+          -- Error details
+          type String,
+          value String,
+          level LowCardinality(String),
+          fingerprint String,
+          
+          -- Context
+          environment LowCardinality(String),
+          release String,
+          server_name String,
+          transaction String,
+          
+          -- User
+          user_id String,
+          user_email String,
+          user_ip String,
+          
+          -- Request
+          request_url String,
+          request_method LowCardinality(String),
+          
+          -- Exception details (JSON)
+          exception String,
+          stacktrace String,
+          breadcrumbs String,
+          tags String,
+          extra String,
+          contexts String,
+          
+          -- SDK info
+          sdk_name String,
+          sdk_version String,
+          
+          -- Grouping
+          issue_id String,
+          
+          INDEX idx_fingerprint fingerprint TYPE bloom_filter GRANULARITY 1,
+          INDEX idx_level level TYPE set(10) GRANULARITY 1,
+          INDEX idx_user_id user_id TYPE bloom_filter GRANULARITY 1
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (project_id, timestamp, fingerprint)
+        TTL timestamp + INTERVAL 90 DAY
+        SETTINGS index_granularity = 8192
+      `,
+    });
+
+    // Logs table
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.logs (
+          id UUID DEFAULT generateUUIDv4(),
+          project_id String,
+          timestamp DateTime64(3),
+          received_at DateTime64(3) DEFAULT now64(3),
+          
+          level LowCardinality(String),
+          message String,
+          logger String,
+          
+          -- Context
+          environment LowCardinality(String),
+          service String,
+          host String,
+          
+          -- Request context
+          request_id String,
+          transaction_id String,
+          user_id String,
+          
+          -- Additional data (JSON)
+          attributes String,
+          
+          INDEX idx_level level TYPE set(10) GRANULARITY 1,
+          INDEX idx_request_id request_id TYPE bloom_filter GRANULARITY 1
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (project_id, timestamp, level)
+        TTL timestamp + INTERVAL 30 DAY
+        SETTINGS index_granularity = 8192
+      `,
+    });
+
+    // HTTP Traces table
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.traces (
+          id UUID DEFAULT generateUUIDv4(),
+          project_id String,
+          trace_id String,
+          timestamp DateTime64(3),
+          
+          -- Request
+          method LowCardinality(String),
+          url String,
+          path String,
+          status_code UInt16,
+          duration_ms UInt32,
+          
+          -- Client
+          ip String,
+          user_agent String,
+          referer String,
+          
+          -- Size
+          request_size UInt32,
+          response_size UInt32,
+          
+          -- Context
+          request_id String,
+          transaction_id String,
+          user_id String,
+          environment LowCardinality(String),
+          server_name String,
+          
+          -- Error
+          error String,
+          
+          -- Headers & params (JSON)
+          headers String,
+          query_params String,
+          
+          INDEX idx_status status_code TYPE set(100) GRANULARITY 1,
+          INDEX idx_method method TYPE set(10) GRANULARITY 1,
+          INDEX idx_path path TYPE bloom_filter GRANULARITY 1
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (project_id, timestamp, path)
+        TTL timestamp + INTERVAL 14 DAY
+        SETTINGS index_granularity = 8192
+      `,
+    });
+
+    // Issues aggregation table (materialized view)
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.issues (
+          id String,
+          project_id String,
+          short_id String,
+          fingerprint String,
+          
+          title String,
+          culprit String,
+          type String,
+          level LowCardinality(String),
+          status LowCardinality(String) DEFAULT 'UNRESOLVED',
+          
+          first_seen DateTime64(3),
+          last_seen DateTime64(3),
+          
+          event_count UInt64,
+          user_count UInt64,
+          
+          environments Array(String),
+          releases Array(String),
+          
+          -- Sample data
+          sample_event_id String,
+          sample_stacktrace String,
+          
+          updated_at DateTime64(3) DEFAULT now64(3)
+        )
+        ENGINE = ReplacingMergeTree(updated_at)
+        ORDER BY (project_id, fingerprint)
+      `,
+    });
+
+    // Metrics aggregation (per minute)
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.metrics_1m (
+          project_id String,
+          timestamp DateTime,
+          
+          -- Error metrics
+          error_count UInt64,
+          warning_count UInt64,
+          
+          -- HTTP metrics
+          request_count UInt64,
+          avg_duration_ms Float64,
+          p50_duration_ms Float64,
+          p95_duration_ms Float64,
+          p99_duration_ms Float64,
+          error_rate Float64,
+          
+          -- Log metrics
+          log_count UInt64,
+          
+          -- By status
+          status_2xx UInt64,
+          status_3xx UInt64,
+          status_4xx UInt64,
+          status_5xx UInt64
+        )
+        ENGINE = SummingMergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (project_id, timestamp)
+        TTL timestamp + INTERVAL 365 DAY
+      `,
+    });
+
+    this.logger.info('ClickHouse schema initialized');
+  }
+
+  /**
+   * Execute a query and return results
+   */
+  async query<T>(query: string, params?: Record<string, unknown>): Promise<T[]> {
+    if (!this.client) return [];
+    try {
+      const result = await this.client.query({
+        query,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      return result.json<T>();
+    } catch (error) {
+      this.nestLogger.error(`ClickHouse query failed: ${error instanceof Error ? error.message : error}`);
+      return [];
+    }
+  }
+
+  /**
+   * Convert ISO timestamp to ClickHouse format
+   */
+  private formatTimestamp(value: unknown): string {
+    if (!value) return new Date().toISOString().replace('T', ' ').replace('Z', '');
+    if (typeof value === 'string') {
+      // Convert ISO format to ClickHouse format: "2026-01-16T01:49:19.000Z" -> "2026-01-16 01:49:19.000"
+      return value.replace('T', ' ').replace('Z', '');
+    }
+    if (value instanceof Date) {
+      return value.toISOString().replace('T', ' ').replace('Z', '');
+    }
+    return String(value);
+  }
+
+  /**
+   * Process values for ClickHouse (convert timestamps, etc.)
+   */
+  private processValues<T extends Record<string, unknown>>(values: T[]): T[] {
+    const timestampFields = ['timestamp', 'received_at', 'created_at', 'updated_at', 'first_seen', 'last_seen'];
+    
+    return values.map(row => {
+      const processed = { ...row };
+      for (const field of timestampFields) {
+        if (field in processed) {
+          processed[field] = this.formatTimestamp(processed[field]);
+        }
+      }
+      return processed as T;
+    });
+  }
+
+  /**
+   * Insert data into a table
+   */
+  async insert<T extends Record<string, unknown>>(
+    table: string,
+    values: T[],
+  ): Promise<void> {
+    if (!this.client || values.length === 0) return;
+    try {
+      const processedValues = this.processValues(values);
+      await this.client.insert({
+        table: `dex_monitoring.${table}`,
+        values: processedValues,
+        format: 'JSONEachRow',
+      });
+    } catch (error) {
+      this.nestLogger.error(`ClickHouse insert failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Execute a command (DDL, etc.)
+   */
+  async command(query: string): Promise<void> {
+    if (!this.client) return;
+    try {
+      await this.client.command({ query });
+    } catch (error) {
+      this.nestLogger.error(`ClickHouse command failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+}

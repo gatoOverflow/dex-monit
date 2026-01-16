@@ -1,0 +1,37 @@
+# ============================================
+# DEX-MONIT API - Dokploy Configuration
+# ============================================
+# Deploy as: Application > Docker > Dockerfile
+# ============================================
+
+name: dex-monit-api
+type: application
+
+# Build Configuration
+build:
+  dockerfile: infra/docker/Dockerfile.api
+  context: .
+
+# Runtime Configuration
+runtime:
+  port: 3000
+  healthCheck:
+    path: /api/health
+    interval: 30s
+    timeout: 10s
+    
+# Resources (adjust based on your needs)
+resources:
+  memory: 512Mi
+  cpu: 0.5
+
+# Environment Variables (set in Dokploy UI)
+# Required:
+#   - DATABASE_URL
+#   - JWT_SECRET
+#   - CLICKHOUSE_HOST
+#   - CLICKHOUSE_PASSWORD
+#   - REDIS_HOST (if using external Redis)
+
+# Domain Configuration (set in Dokploy UI)
+# Example: api.dex-monit.com

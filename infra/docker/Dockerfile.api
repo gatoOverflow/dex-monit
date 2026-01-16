@@ -1,0 +1,58 @@
+# ============================================
+# DEX-MONIT API - Production Dockerfile
+# ============================================
+
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+COPY nx.json ./
+COPY tsconfig*.json ./
+
+# Copy workspace packages
+COPY packages/observability ./packages/observability
+COPY packages/monitoring-api ./packages/monitoring-api
+
+# Install all dependencies
+RUN npm ci --legacy-peer-deps
+
+# Generate Prisma Client
+RUN cd packages/monitoring-api && npx prisma generate
+
+# Build the API
+RUN npx nx build monitoring-api --configuration=production
+
+# Production stage
+FROM node:20-alpine AS production
+
+WORKDIR /app
+
+# Install only production dependencies
+COPY package*.json ./
+RUN npm ci --only=production --legacy-peer-deps
+
+# Copy Prisma schema and generate client
+COPY packages/monitoring-api/prisma ./prisma
+RUN npx prisma generate
+
+# Copy built application
+COPY --from=builder /app/dist/packages/monitoring-api ./dist
+
+# Copy node_modules for runtime deps
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Environment
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+
+EXPOSE 3000
+
+# Run the application
+CMD ["node", "dist/main.js"]

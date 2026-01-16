@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - For configuration data (users, teams, projects, settings)
+  postgres:
+    image: postgres:16-alpine
+    container_name: dex-postgres
+    environment:
+      POSTGRES_USER: dex
+      POSTGRES_PASSWORD: dex_secret
+      POSTGRES_DB: dex_monitoring
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dex -d dex_monitoring"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ClickHouse - For time-series data (events, logs, traces, metrics)
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    container_name: dex-clickhouse
+    environment:
+      CLICKHOUSE_DB: dex_monitoring
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native interface
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis - For caching, queuing, rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: dex-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Commander (optional - for debugging)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: dex-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    profiles:
+      - debug
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  clickhouse_logs:
+  redis_data:
+
+networks:
+  default:
+    name: dex-network
