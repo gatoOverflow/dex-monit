@@ -1,6 +1,6 @@
 {
   "name": "@dex-monit/observability-contracts",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "TypeScript contracts and interfaces for Dex Monitoring SDK",
   "keywords": ["observability", "monitoring", "typescript", "contracts"],
   "author": "Dex Team",
@@ -10,15 +10,13 @@
     "url": "https://github.com/dex/dex-monit.git",
     "directory": "packages/observability/contracts"
   },
-  "type": "module",
   "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "require": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },

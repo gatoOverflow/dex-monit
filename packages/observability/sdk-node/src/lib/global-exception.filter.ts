@@ -9,7 +9,7 @@ import {
 import { Request, Response } from 'express';
 import { RequestContextService } from '@dex-monit/observability-request-context';
 import { Logger } from '@dex-monit/observability-logger';
-import { MonitoringClient } from './monitoring-client.js';
+import { MonitoringClient } from './monitoring-client';
 
 /**
  * Error response structure

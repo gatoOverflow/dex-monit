@@ -1,21 +1,21 @@
 {
-  "name": "@dex-monit/observability-sdk-node",
-  "version": "1.0.14",
-  "description": "NestJS SDK for Dex Monitoring - Error tracking and log management",
+  "name": "@dex-monit/observability-sdk-react-native",
+  "version": "1.0.0",
+  "description": "React Native SDK for Dex Monitoring - Error tracking for mobile apps",
   "keywords": [
     "observability",
     "monitoring",
-    "nestjs",
+    "react-native",
     "error-tracking",
-    "logging",
-    "sentry-alternative"
+    "mobile",
+    "crash-reporting"
   ],
   "author": "Dex Team",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dex/dex-monit.git",
-    "directory": "packages/observability/sdk-node"
+    "directory": "packages/observability/sdk-react-native"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -32,19 +32,23 @@
     "README.md"
   ],
   "nx": {
-    "name": "sdk-node"
+    "name": "sdk-react-native"
+  },
+  "scripts": {
+    "build": "tsc --build tsconfig.lib.json",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@dex-monit/observability-contracts": "^1.0.0",
-    "@dex-monit/observability-logger": "^1.0.0",
-    "@dex-monit/observability-request-context": "^1.0.0",
-    "@dex-monit/observability-scrubber": "^1.0.0",
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
-    "@nestjs/common": "^10.0.0 || ^11.0.0",
-    "@nestjs/core": "^10.0.0 || ^11.0.0",
-    "rxjs": "^7.0.0 || ^8.0.0",
-    "uuid": "^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0"
+    "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
+    "react-native": ">=0.60.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
   }
 }

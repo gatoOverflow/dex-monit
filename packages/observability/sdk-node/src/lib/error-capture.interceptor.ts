@@ -8,7 +8,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { Request } from 'express';
 import * as os from 'os';
-import { MonitoringClient } from './monitoring-client.js';
+import { MonitoringClient } from './monitoring-client';
 
 /**
  * Error Capture Interceptor

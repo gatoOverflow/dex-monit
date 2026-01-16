@@ -1,1 +1,1 @@
-export * from './lib/request-context.js';
+export * from './lib/request-context';

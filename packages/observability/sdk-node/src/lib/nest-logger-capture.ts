@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Logger as NestLogger, ConsoleLogger } from '@nestjs/common';
-import { MonitoringClient } from './monitoring-client.js';
+import { MonitoringClient } from './monitoring-client';
 import { Severity } from '@dex-monit/observability-contracts';
 import { RequestContextService } from '@dex-monit/observability-request-context';
 

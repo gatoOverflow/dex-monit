@@ -1,6 +1,6 @@
 {
   "name": "@dex-monit/observability-logger",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Pino-based structured logger with automatic request context injection",
   "keywords": ["observability", "logger", "pino", "structured-logging", "json"],
   "author": "Dex Team",
@@ -10,15 +10,13 @@
     "url": "https://github.com/dex/dex-monit.git",
     "directory": "packages/observability/logger"
   },
-  "type": "module",
   "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "require": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },

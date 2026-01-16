@@ -1,1 +1,1 @@
-export * from './lib/scrubber.js';
+export * from './lib/scrubber';

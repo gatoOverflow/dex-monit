@@ -11,18 +11,10 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "esModuleInterop": true,
+    "jsx": "react"
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "references": [
-    {
-      "path": "../logger/tsconfig.lib.json"
-    },
-    {
-      "path": "../scrubber/tsconfig.lib.json"
-    },
-    {
-      "path": "../request-context/tsconfig.lib.json"
-    },
     {
       "path": "../contracts/tsconfig.lib.json"
     }

@@ -1,5 +1,5 @@
 import { Injectable, LoggerService, Scope } from '@nestjs/common';
-import { MonitoringClient } from './monitoring-client.js';
+import { MonitoringClient } from './monitoring-client';
 import { Severity } from '@dex-monit/observability-contracts';
 import { RequestContextService } from '@dex-monit/observability-request-context';
 

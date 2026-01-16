@@ -1,4 +1,4 @@
-import { MonitoringClient } from './monitoring-client.js';
+import { MonitoringClient } from './monitoring-client';
 import { Severity } from '@dex-monit/observability-contracts';
 
 type ConsoleMethod = 'log' | 'info' | 'warn' | 'error' | 'debug';

@@ -7,7 +7,7 @@ import {
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Request, Response } from 'express';
-import { MonitoringClient, addBreadcrumb } from './monitoring-client.js';
+import { MonitoringClient, addBreadcrumb } from './monitoring-client';
 import { RequestContextService } from '@dex-monit/observability-request-context';
 import { Severity } from '@dex-monit/observability-contracts';
 

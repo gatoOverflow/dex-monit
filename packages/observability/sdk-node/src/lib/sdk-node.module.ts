@@ -7,22 +7,22 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
-import { RequestIdMiddleware } from './request-id.middleware.js';
-import { GlobalExceptionFilter } from './global-exception.filter.js';
-import { ErrorCaptureInterceptor } from './error-capture.interceptor.js';
+import { RequestIdMiddleware } from './request-id.middleware';
+import { GlobalExceptionFilter } from './global-exception.filter';
+import { ErrorCaptureInterceptor } from './error-capture.interceptor';
 import {
   MonitoringClient,
   MonitoringClientConfig,
   createMonitoringClient,
-} from './monitoring-client.js';
-import { RemoteLogger, createRemoteLogger } from './remote-logger.js';
-import { DexLoggerService, DEX_LOGGER_TOKEN } from './dex-logger.service.js';
-import { startConsoleCapture, stopConsoleCapture } from './console-capture.js';
+} from './monitoring-client';
+import { RemoteLogger, createRemoteLogger } from './remote-logger';
+import { DexLoggerService, DEX_LOGGER_TOKEN } from './dex-logger.service';
+import { startConsoleCapture, stopConsoleCapture } from './console-capture';
 import {
   startNestLoggerCapture,
   stopNestLoggerCapture,
-} from './nest-logger-capture.js';
-import { HttpTraceInterceptor } from './http-interceptor.js';
+} from './nest-logger-capture';
+import { HttpTraceInterceptor } from './http-interceptor';
 import {
   Logger,
   LoggerConfig,
