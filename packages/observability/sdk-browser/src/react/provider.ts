@@ -58,9 +58,9 @@ export function DexProvider({ config, children }: DexProviderProps): ReactNode {
     setIsReady(true);
     setSessionId(getSessionId());
 
-    return () => {
-      close();
-    };
+    // Don't call close() on unmount - this would delete the session
+    // The session should persist across navigation
+    // close() is only called when the page actually closes (beforeunload)
   }, [config]);
 
   const value: DexContextValue = {

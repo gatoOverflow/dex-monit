@@ -1,6 +1,6 @@
 {
   "name": "@dex-monit/observability-sdk-browser",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Browser SDK for Dex Monitoring - Error tracking for React & Next.js apps",
   "keywords": [
     "observability",
