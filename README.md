@@ -1,90 +1,470 @@
-# DexMonit
+# Dex Monitoring Platform
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+A comprehensive, self-hosted observability platform for error tracking, log management, session analytics, and performance monitoring. Built with modern technologies and designed for production use.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is almost ready ✨.
+![Platform](https://img.shields.io/badge/Platform-Node.js-green)
+![Frontend](https://img.shields.io/badge/Frontend-Next.js-black)
+![Backend](https://img.shields.io/badge/Backend-NestJS-red)
+![Database](https://img.shields.io/badge/Database-PostgreSQL%20%7C%20ClickHouse-blue)
+![Cache](https://img.shields.io/badge/Cache-Redis-orange)
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/js?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+---
 
-## Finish your remote caching setup
+## 🎯 Features
 
-[Click here to finish setting up your workspace!](https://cloud.nx.app/connect/nESXQox01H)
+### Error Tracking
+- Real-time error capture and alerting
+- Stack trace parsing with source code context
+- Fingerprinting and issue grouping
+- Breadcrumbs for debugging
+- User context and tags
 
+### Log Management
+- Structured JSON logging
+- Log levels (DEBUG, INFO, WARNING, ERROR)
+- Full-text search
+- Log filtering by project, environment, level
 
-## Generate a library
+### Session Analytics
+- Real-time active users tracking
+- Session duration and page views
+- Device and browser detection
+- Geographic location tracking
+- User journey visualization
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+### HTTP Tracing
+- Request/response monitoring
+- Latency percentiles (P50, P95, P99)
+- Error rate tracking
+- Request filtering and search
+
+### Alerting System
+- Custom alert rules
+- Multi-channel notifications (Slack, Email, Webhook, Discord)
+- Alert cooldowns
+- Threshold-based triggers
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        SDKs                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ sdk-node    │  │ sdk-browser │  │ sdk-react-native        │  │
+│  │ (NestJS)    │  │ (React/Next)│  │ (React Native/Expo)     │  │
+│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
+└─────────┼────────────────┼─────────────────────┼────────────────┘
+          │                │                     │
+          └────────────────┼─────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    monitoring-api (NestJS)                       │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
+│  │ Ingest  │ │ Issues  │ │  Logs   │ │ Traces  │ │Sessions │   │
+│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘   │
+│       │           │           │           │           │         │
+│       └───────────┴───────────┴───────────┴───────────┘         │
+│                               │                                  │
+│  ┌────────────────────────────┼────────────────────────────┐    │
+│  │                            ▼                             │    │
+│  │  ┌──────────┐  ┌───────────────┐  ┌──────────────────┐  │    │
+│  │  │PostgreSQL│  │  ClickHouse   │  │      Redis       │  │    │
+│  │  │ (Config) │  │ (Time-series) │  │ (Cache/Queue)    │  │    │
+│  │  └──────────┘  └───────────────┘  └──────────────────┘  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   monitoring-web (Next.js)                       │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │Dashboard │ │  Issues  │ │   Logs   │ │ Sessions │           │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Run tasks
+---
 
-To build the library use:
+## 📦 Packages
 
-```sh
-npx nx build pkg1
+| Package | Description | npm |
+|---------|-------------|-----|
+| `@dex-monit/observability-sdk-node` | SDK for NestJS/Node.js backends | [![npm](https://img.shields.io/npm/v/@dex-monit/observability-sdk-node)](https://www.npmjs.com/package/@dex-monit/observability-sdk-node) |
+| `@dex-monit/observability-sdk-browser` | SDK for React/Next.js apps | [![npm](https://img.shields.io/npm/v/@dex-monit/observability-sdk-browser)](https://www.npmjs.com/package/@dex-monit/observability-sdk-browser) |
+| `@dex-monit/observability-sdk-react-native` | SDK for React Native/Expo apps | [![npm](https://img.shields.io/npm/v/@dex-monit/observability-sdk-react-native)](https://www.npmjs.com/package/@dex-monit/observability-sdk-react-native) |
+| `@dex-monit/observability-contracts` | Shared TypeScript interfaces | [![npm](https://img.shields.io/npm/v/@dex-monit/observability-contracts)](https://www.npmjs.com/package/@dex-monit/observability-contracts) |
+| `@dex-monit/observability-logger` | Pino-based structured logger | [![npm](https://img.shields.io/npm/v/@dex-monit/observability-logger)](https://www.npmjs.com/package/@dex-monit/observability-logger) |
+
+---
+
+## 🚀 Prerequisites
+
+### Required
+- **Node.js** >= 20.x
+- **npm** >= 10.x
+- **PostgreSQL** >= 14
+- **ClickHouse** >= 23.x (for time-series data)
+- **Redis** >= 7.x (for caching and queues)
+
+### Optional
+- **Docker** & **Docker Compose** (for local development)
+
+---
+
+## ⚙️ Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/DEXCHANGE-GROUP/dex-monit.git
+cd dex-monit
 ```
 
-To run any task with Nx use:
+### 2. Install dependencies
 
-```sh
-npx nx <target> <project-name>
+```bash
+npm install
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+### 3. Start infrastructure (Docker)
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Versioning and releasing
-
-To version and release the library use
-
-```
-npx nx release
+```bash
+docker-compose up -d
 ```
 
-Pass `--dry-run` to see what would happen without actually releasing the library.
+This starts:
+- PostgreSQL on port `5432`
+- ClickHouse on port `8123` (HTTP) / `9000` (Native)
+- Redis on port `6379`
 
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+### 4. Configure environment variables
 
-## Keep TypeScript project references up to date
+**API (`packages/monitoring-api/.env`):**
 
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
+```env
+# Database
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dex_monitoring
 
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
+# ClickHouse
+CLICKHOUSE_ENABLED=true
+CLICKHOUSE_HOST=localhost
+CLICKHOUSE_PORT=8123
+CLICKHOUSE_DATABASE=dex_monitoring
+CLICKHOUSE_USERNAME=default
+CLICKHOUSE_PASSWORD=
+CLICKHOUSE_PROTOCOL=http
 
-```sh
-npx nx sync
+# Redis
+REDIS_ENABLED=true
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_EXPIRES_IN=7d
+
+# Server
+PORT=3000
+NODE_ENV=development
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+**Frontend (`packages/monitoring-web/.env.local`):**
 
-```sh
-npx nx sync:check
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000/api
 ```
 
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
+### 5. Initialize the database
 
+```bash
+cd packages/monitoring-api
+npx prisma generate
+npx prisma db push
+```
 
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+### 6. Run the applications
 
-## Install Nx Console
+**In separate terminals:**
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+```bash
+# Terminal 1 - API
+npx nx serve monitoring-api
 
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+# Terminal 2 - Frontend
+npx nx dev monitoring-web
+```
 
-## Useful links
+Or run both in parallel:
 
-Learn more:
+```bash
+npx nx run-many -t serve,dev -p monitoring-api,monitoring-web
+```
 
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+### 7. Access the platform
 
-And join the Nx community:
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- **Frontend:** http://localhost:3001
+- **API:** http://localhost:3000/api
+- **API Docs:** http://localhost:3000/api/docs (Swagger)
+
+---
+
+## 🔧 Development
+
+### Project Structure
+
+```
+dex-monit/
+├── packages/
+│   ├── monitoring-api/          # NestJS backend
+│   │   ├── src/
+│   │   │   ├── modules/
+│   │   │   │   ├── auth/        # Authentication (JWT)
+│   │   │   │   ├── ingest/      # Data ingestion endpoints
+│   │   │   │   ├── issues/      # Issue management
+│   │   │   │   ├── logs/        # Log management
+│   │   │   │   ├── traces/      # HTTP traces
+│   │   │   │   ├── sessions/    # Session tracking
+│   │   │   │   ├── alerts/      # Alert rules & notifications
+│   │   │   │   ├── projects/    # Projects & API keys
+│   │   │   │   ├── teams/       # Team management
+│   │   │   │   ├── clickhouse/  # ClickHouse service
+│   │   │   │   └── redis/       # Redis service
+│   │   │   └── prisma/          # Prisma schema
+│   │   └── package.json
+│   │
+│   ├── monitoring-web/          # Next.js frontend
+│   │   ├── src/
+│   │   │   ├── app/             # App Router pages
+│   │   │   ├── components/      # React components
+│   │   │   └── lib/             # Utilities & API client
+│   │   └── package.json
+│   │
+│   └── observability/           # SDK packages
+│       ├── contracts/           # Shared interfaces
+│       ├── sdk-node/            # NestJS SDK
+│       ├── sdk-browser/         # React/Next.js SDK
+│       ├── sdk-react-native/    # React Native SDK
+│       ├── logger/              # Pino logger
+│       ├── request-context/     # AsyncLocalStorage context
+│       └── scrubber/            # Sensitive data scrubber
+│
+├── docker-compose.yml           # Local infrastructure
+├── Dockerfile.api               # API production build
+├── Dockerfile.web               # Frontend production build
+└── nx.json                      # Nx workspace config
+```
+
+### Useful Commands
+
+```bash
+# Build all packages
+npx nx run-many -t build --all
+
+# Build specific package
+npx nx build monitoring-api
+npx nx build monitoring-web
+npx nx build sdk-node
+
+# Run tests
+npx nx run-many -t test --all
+
+# Lint
+npx nx run-many -t lint --all
+
+# Generate Prisma client
+cd packages/monitoring-api && npx prisma generate
+
+# Run migrations
+cd packages/monitoring-api && npx prisma db push
+
+# Open Prisma Studio
+cd packages/monitoring-api && npx prisma studio
+```
+
+---
+
+## 📱 SDK Integration
+
+### NestJS Backend
+
+```bash
+npm install @dex-monit/observability-sdk-node
+```
+
+```typescript
+// app.module.ts
+import { SdkNodeModule } from '@dex-monit/observability-sdk-node';
+
+@Module({
+  imports: [
+    SdkNodeModule.forRoot({
+      apiKey: process.env.DEX_API_KEY,
+      apiUrl: process.env.DEX_API_URL,
+      environment: process.env.NODE_ENV,
+      captureConsole: true,
+      captureNestLogger: true,
+      captureHttpRequests: true,
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### React / Next.js
+
+```bash
+npm install @dex-monit/observability-sdk-browser
+```
+
+```tsx
+// app/providers.tsx
+'use client';
+import { DexProvider } from '@dex-monit/observability-sdk-browser/react';
+
+export function Providers({ children }) {
+  return (
+    <DexProvider
+      config={{
+        apiKey: process.env.NEXT_PUBLIC_DEX_API_KEY!,
+        apiUrl: process.env.NEXT_PUBLIC_DEX_API_URL!,
+        environment: process.env.NODE_ENV,
+      }}
+    >
+      {children}
+    </DexProvider>
+  );
+}
+```
+
+### React Native / Expo
+
+```bash
+npm install @dex-monit/observability-sdk-react-native
+npx expo install expo-device  # For device detection
+```
+
+```typescript
+// App.tsx
+import { init, setUser } from '@dex-monit/observability-sdk-react-native';
+
+init({
+  apiKey: 'your-api-key',
+  apiUrl: 'https://your-monitoring-api.com/api',
+  environment: 'production',
+  debug: __DEV__,
+});
+
+// After login
+setUser({ id: user.id, email: user.email });
+```
+
+---
+
+## 🚢 Production Deployment
+
+### Docker Build
+
+```bash
+# Build API
+docker build -f Dockerfile.api -t dex-monitoring-api .
+
+# Build Frontend
+docker build -f Dockerfile.web -t dex-monitoring-web .
+```
+
+### Environment Variables (Production)
+
+**API:**
+```env
+DATABASE_URL=postgresql://user:pass@db-host:5432/dex_monitoring
+CLICKHOUSE_HOST=clickhouse-host
+CLICKHOUSE_PORT=8443
+CLICKHOUSE_PROTOCOL=https
+CLICKHOUSE_USERNAME=default
+CLICKHOUSE_PASSWORD=secure-password
+REDIS_HOST=redis-host
+REDIS_PASSWORD=secure-password
+JWT_SECRET=super-long-random-secret-key
+PORT=3000
+NODE_ENV=production
+```
+
+**Frontend:**
+```env
+NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
+NEXT_PUBLIC_REGISTRATION_ENABLED=false
+```
+
+### Health Checks
+
+- `GET /health` - Overall health
+- `GET /health/live` - Liveness probe
+- `GET /health/ready` - Readiness probe
+
+---
+
+## 📊 Database Schema
+
+### PostgreSQL (Configuration)
+- Users, Teams, Projects
+- API Keys
+- Alert Rules
+- Team Settings
+
+### ClickHouse (Time-series)
+- Events (errors)
+- Logs
+- HTTP Traces
+- Sessions
+- Page Views
+- User Activity
+
+---
+
+## 🔐 Authentication
+
+### User Authentication
+- JWT-based authentication
+- Registration and login
+- Password hashing with bcrypt
+
+### API Key Authentication
+- Project-scoped API keys
+- Used by SDKs for data ingestion
+- Supports multiple keys per project
+
+---
+
+## 📈 Monitoring Your Platform
+
+The platform monitors itself! Use the SDKs to send data to another instance or use the built-in health endpoints for external monitoring.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+## 🙏 Acknowledgments
+
+- [NestJS](https://nestjs.com/) - Backend framework
+- [Next.js](https://nextjs.org/) - Frontend framework
+- [ClickHouse](https://clickhouse.com/) - Time-series database
+- [Prisma](https://prisma.io/) - ORM
+- [shadcn/ui](https://ui.shadcn.com/) - UI components
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
