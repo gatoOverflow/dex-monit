@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
   Users,
   Activity,
-  Clock,
   Monitor,
   Smartphone,
   Tablet,
@@ -26,7 +25,6 @@ import {
   Timer,
   MapPin,
   Navigation,
-  Calendar,
   User,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -64,14 +62,6 @@ function formatDuration(ms: number): string {
   const hours = Math.floor(ms / 3600000);
   const mins = Math.round((ms % 3600000) / 60000);
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-}
-
-function formatTime(date: string): string {
-  return new Date(date).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
 }
 
 function formatTimeAgo(date: string): string {

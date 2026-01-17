@@ -500,10 +500,9 @@ function IssuesPageContent() {
                           const platformCfg = getPlatformConfig(issue.platform);
                           const PlatformIcon = platformCfg.icon;
                           return (
-                            <PlatformIcon 
-                              className={`h-3.5 w-3.5 ${platformCfg.color}`} 
-                              title={platformCfg.label}
-                            />
+                            <span title={platformCfg.label}>
+                              <PlatformIcon className={`h-3.5 w-3.5 ${platformCfg.color}`} />
+                            </span>
                           );
                         })()}
                         <span className="font-mono text-xs text-muted-foreground">

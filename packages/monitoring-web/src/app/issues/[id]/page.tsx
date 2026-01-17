@@ -664,38 +664,41 @@ export default function IssueDetailPage() {
                           </div>
                         </div>
                       )}
-                      {/* Mobile Device Info (from extra.deviceInfo) */}
-                      {latestEvent.contexts.extra?.deviceInfo && (
-                        <div className="px-6 py-3">
-                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
-                            <Smartphone className="inline h-3 w-3 mr-1" />
-                            Mobile Device
-                          </p>
-                          <div className="space-y-1 text-sm">
-                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).model && (
-                              <p><span className="text-muted-foreground">Model:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).model)}</p>
-                            )}
-                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).brand && (
-                              <p><span className="text-muted-foreground">Brand:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).brand)}</p>
-                            )}
-                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).systemName && (
-                              <p><span className="text-muted-foreground">OS:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).systemName)} {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).systemVersion || '')}</p>
-                            )}
-                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).appVersion && (
-                              <p><span className="text-muted-foreground">App Version:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).appVersion)}</p>
-                            )}
-                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).buildNumber && (
-                              <p><span className="text-muted-foreground">Build:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).buildNumber)}</p>
-                            )}
-                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).isTablet !== undefined && (
-                              <p><span className="text-muted-foreground">Type:</span> {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).isTablet ? 'Tablet' : 'Phone'}</p>
-                            )}
-                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).isEmulator && (
-                              <Badge variant="outline" className="mt-1 text-yellow-500 border-yellow-500/30">Emulator</Badge>
-                            )}
+                      {(() => {
+                        const deviceInfo = latestEvent.contexts?.extra?.deviceInfo as Record<string, unknown> | undefined;
+                        if (!deviceInfo) return null;
+                        return (
+                          <div className="px-6 py-3">
+                            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+                              <Smartphone className="inline h-3 w-3 mr-1" />
+                              Mobile Device
+                            </p>
+                            <div className="space-y-1 text-sm">
+                              {deviceInfo.model ? (
+                                <p><span className="text-muted-foreground">Model:</span> {String(deviceInfo.model)}</p>
+                              ) : null}
+                              {deviceInfo.brand ? (
+                                <p><span className="text-muted-foreground">Brand:</span> {String(deviceInfo.brand)}</p>
+                              ) : null}
+                              {deviceInfo.systemName ? (
+                                <p><span className="text-muted-foreground">OS:</span> {String(deviceInfo.systemName)} {String(deviceInfo.systemVersion || '')}</p>
+                              ) : null}
+                              {deviceInfo.appVersion ? (
+                                <p><span className="text-muted-foreground">App Version:</span> {String(deviceInfo.appVersion)}</p>
+                              ) : null}
+                              {deviceInfo.buildNumber ? (
+                                <p><span className="text-muted-foreground">Build:</span> {String(deviceInfo.buildNumber)}</p>
+                              ) : null}
+                              {deviceInfo.isTablet !== undefined ? (
+                                <p><span className="text-muted-foreground">Type:</span> {deviceInfo.isTablet ? 'Tablet' : 'Phone'}</p>
+                              ) : null}
+                              {deviceInfo.isEmulator ? (
+                                <Badge variant="outline" className="mt-1 text-yellow-500 border-yellow-500/30">Emulator</Badge>
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
