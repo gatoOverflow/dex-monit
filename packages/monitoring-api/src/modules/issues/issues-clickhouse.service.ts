@@ -13,6 +13,7 @@ export interface ClickHouseIssue {
   type: string;
   level: string;
   status: string;
+  platform: string;
   first_seen: string;
   last_seen: string;
   event_count: number;
@@ -27,6 +28,7 @@ export interface ListIssuesParams {
   projectId?: string; // Optional - if not provided, returns all issues
   status?: string;
   level?: string;
+  platform?: string;
   environment?: string;
   search?: string;
   from?: Date;
@@ -66,6 +68,7 @@ export class IssuesClickHouseService {
       projectId,
       status,
       level,
+      platform,
       environment,
       search,
       from,
@@ -93,6 +96,11 @@ export class IssuesClickHouseService {
     if (level) {
       conditions.push('level = {level:String}');
       queryParams.level = level.toUpperCase();
+    }
+
+    if (platform) {
+      conditions.push('platform = {platform:String}');
+      queryParams.platform = platform.toLowerCase();
     }
 
     if (environment) {

@@ -10,6 +10,10 @@ import {
   CheckCircle,
   XCircle,
   MoreHorizontal,
+  Smartphone,
+  Monitor,
+  Server,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppLayout } from '@/components/AppLayout';
@@ -24,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { issuesApi, Issue } from '@/lib/api-client';
+import { issuesApi, projectsApi, Issue, Project } from '@/lib/api-client';
 
 function formatTimeAgo(date: string): string {
   const now = new Date();
@@ -47,6 +51,20 @@ const levelConfig: Record<string, { bg: string; text: string; border: string; do
   INFO: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20', dot: 'bg-blue-500' },
   DEBUG: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20', dot: 'bg-purple-500' },
 };
+
+const platformConfig: Record<string, { icon: typeof Smartphone; label: string; color: string }> = {
+  'react-native': { icon: Smartphone, label: 'Mobile', color: 'text-green-400' },
+  'node': { icon: Server, label: 'Node.js', color: 'text-emerald-400' },
+  'browser': { icon: Globe, label: 'Browser', color: 'text-blue-400' },
+  'javascript': { icon: Globe, label: 'Browser', color: 'text-blue-400' },
+  'unknown': { icon: Monitor, label: 'Unknown', color: 'text-muted-foreground' },
+};
+
+function getPlatformConfig(platform?: string) {
+  if (!platform) return platformConfig.unknown;
+  const key = platform.toLowerCase();
+  return platformConfig[key] || platformConfig.unknown;
+}
 
 // Mini sparkline chart component
 function Sparkline({ data, level }: { data: number[]; level: string }) {
@@ -91,14 +109,21 @@ function IssuesPageContent() {
   const { user, loading: authLoading } = useAuth();
 
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [projectFilter, setProjectFilter] = useState<string>(
+    searchParams.get('projectId') || 'all'
+  );
   const [statusFilter, setStatusFilter] = useState<string>(
     searchParams.get('status') || 'all'
   );
   const [levelFilter, setLevelFilter] = useState<string>(
     searchParams.get('level') || 'all'
+  );
+  const [platformFilter, setPlatformFilter] = useState<string>(
+    searchParams.get('platform') || 'all'
   );
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -111,6 +136,21 @@ function IssuesPageContent() {
     }
   }, [authLoading, user, router]);
 
+  // Load projects for filter
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const data = await projectsApi.list();
+        setProjects(data || []);
+      } catch {
+        // Ignore
+      }
+    };
+    if (user) {
+      loadProjects();
+    }
+  }, [user]);
+
   const loadIssues = useCallback(async () => {
     if (!user) return;
 
@@ -118,25 +158,69 @@ function IssuesPageContent() {
       setLoading(true);
       setError(null);
 
-      const result = await issuesApi.list({
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        level: levelFilter !== 'all' ? levelFilter : undefined,
-        page,
-        pageSize: 25,
-        sortBy: 'lastSeen',
-        sortOrder: 'desc',
-      });
+      // If a specific project is selected
+      if (projectFilter !== 'all') {
+        const result = await issuesApi.list({
+          projectId: projectFilter,
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+          level: levelFilter !== 'all' ? levelFilter : undefined,
+          platform: platformFilter !== 'all' ? platformFilter : undefined,
+          page,
+          pageSize: 25,
+          sortBy: 'lastSeen',
+          sortOrder: 'desc',
+        });
 
-      setIssues(result.data);
-      setTotalPages(result.meta.totalPages);
-      setTotal(result.meta.total);
+        setIssues(result.data);
+        setTotalPages(result.meta.totalPages);
+        setTotal(result.meta.total);
+      } else {
+        // Load issues from all user's projects
+        if (projects.length === 0) {
+          setIssues([]);
+          setTotalPages(0);
+          setTotal(0);
+          return;
+        }
+
+        // Fetch issues from all projects and combine
+        const issuesPromises = projects.slice(0, 10).map((p) =>
+          issuesApi.list({
+            projectId: p.id,
+            status: statusFilter !== 'all' ? statusFilter : undefined,
+            level: levelFilter !== 'all' ? levelFilter : undefined,
+            platform: platformFilter !== 'all' ? platformFilter : undefined,
+            page: 1,
+            pageSize: 25,
+            sortBy: 'lastSeen',
+            sortOrder: 'desc',
+          }).catch(() => ({
+            data: [] as Issue[],
+            meta: { total: 0, page: 1, pageSize: 25, totalPages: 0 },
+          }))
+        );
+
+        const allIssuesResults = await Promise.all(issuesPromises);
+
+        // Combine and sort all issues by lastSeen
+        const allIssues = allIssuesResults
+          .flatMap((r) => r.data)
+          .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
+          .slice(0, 25);
+
+        const totalIssues = allIssuesResults.reduce((sum, r) => sum + (r.meta?.total || 0), 0);
+
+        setIssues(allIssues);
+        setTotalPages(Math.ceil(totalIssues / 25));
+        setTotal(totalIssues);
+      }
     } catch (err) {
       console.error('Failed to load issues:', err);
       setError('Failed to load issues');
     } finally {
       setLoading(false);
     }
-  }, [user, statusFilter, levelFilter, page]);
+  }, [user, projects, projectFilter, statusFilter, levelFilter, platformFilter, page]);
 
   useEffect(() => {
     loadIssues();
@@ -230,6 +314,25 @@ function IssuesPageContent() {
             />
           </div>
           <Select
+            value={projectFilter}
+            onValueChange={(value) => {
+              setProjectFilter(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[160px] h-9 bg-muted/50 border-border">
+              <SelectValue placeholder="Project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Projects</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
             value={statusFilter}
             onValueChange={(value) => {
               setStatusFilter(value);
@@ -262,6 +365,38 @@ function IssuesPageContent() {
               <SelectItem value="ERROR">Error</SelectItem>
               <SelectItem value="WARNING">Warning</SelectItem>
               <SelectItem value="INFO">Info</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={platformFilter}
+            onValueChange={(value) => {
+              setPlatformFilter(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[130px] h-9 bg-muted/50 border-border">
+              <SelectValue placeholder="Platform" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Platforms</SelectItem>
+              <SelectItem value="react-native">
+                <span className="flex items-center gap-2">
+                  <Smartphone className="h-3 w-3" />
+                  Mobile
+                </span>
+              </SelectItem>
+              <SelectItem value="node">
+                <span className="flex items-center gap-2">
+                  <Server className="h-3 w-3" />
+                  Node.js
+                </span>
+              </SelectItem>
+              <SelectItem value="browser">
+                <span className="flex items-center gap-2">
+                  <Globe className="h-3 w-3" />
+                  Browser
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -360,6 +495,17 @@ function IssuesPageContent() {
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <div className={`h-2 w-2 rounded-full ${level.dot}`} />
+                        {/* Platform Icon */}
+                        {(() => {
+                          const platformCfg = getPlatformConfig(issue.platform);
+                          const PlatformIcon = platformCfg.icon;
+                          return (
+                            <PlatformIcon 
+                              className={`h-3.5 w-3.5 ${platformCfg.color}`} 
+                              title={platformCfg.label}
+                            />
+                          );
+                        })()}
                         <span className="font-mono text-xs text-muted-foreground">
                           {issue.shortId}
                         </span>

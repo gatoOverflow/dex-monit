@@ -21,8 +21,10 @@ import {
   issuesApi,
   projectsApi,
   logsApi,
+  sessionsApi,
   Issue,
   Project,
+  ActiveUsersStats,
 } from '@/lib/api-client';
 
 interface DashboardStats {
@@ -31,6 +33,7 @@ interface DashboardStats {
   totalProjects: number;
   totalLogs: number;
   errorLogs: number;
+  activeUsers: ActiveUsersStats | null;
 }
 
 export default function DashboardPage() {
@@ -62,18 +65,54 @@ export default function DashboardPage() {
           data: [] as Issue[],
           meta: { total: 0, page: 1, pageSize: 5, totalPages: 0 },
         };
-        try {
-          issuesResult = await issuesApi.list({
-            pageSize: 5,
-            sortBy: 'lastSeen',
-            sortOrder: 'desc',
-          });
-        } catch {
-          // No issues yet
+
+        // Only load issues if user has projects
+        if (projectsResult.length > 0) {
+          try {
+            // Fetch issues for each user project and combine
+            const projectIds = projectsResult.map((p) => p.id);
+            const issuesPromises = projectIds.slice(0, 5).map((projectId) =>
+              issuesApi
+                .list({
+                  projectId,
+                  pageSize: 5,
+                  sortBy: 'lastSeen',
+                  sortOrder: 'desc',
+                })
+                .catch(() => ({
+                  data: [] as Issue[],
+                  meta: { total: 0, page: 1, pageSize: 5, totalPages: 0 },
+                })),
+            );
+            const allIssuesResults = await Promise.all(issuesPromises);
+
+            // Combine and sort all issues by lastSeen
+            const allIssues = allIssuesResults
+              .flatMap((r) => r.data)
+              .sort(
+                (a, b) =>
+                  new Date(b.lastSeen).getTime() -
+                  new Date(a.lastSeen).getTime(),
+              )
+              .slice(0, 5);
+
+            const totalIssues = allIssuesResults.reduce(
+              (sum, r) => sum + (r.meta?.total || 0),
+              0,
+            );
+
+            issuesResult = {
+              data: allIssues,
+              meta: { total: totalIssues, page: 1, pageSize: 5, totalPages: 1 },
+            };
+          } catch {
+            // No issues yet
+          }
         }
 
         let totalLogs = 0;
         let errorLogs = 0;
+        let activeUsers: ActiveUsersStats | null = null;
 
         if (projectsResult.length > 0) {
           try {
@@ -94,6 +133,15 @@ export default function DashboardPage() {
           } catch {
             // Ignore stats errors
           }
+
+          // Get active users for the first project
+          try {
+            activeUsers = await sessionsApi.getActiveUsers(
+              projectsResult[0].id,
+            );
+          } catch {
+            // Ignore active users errors
+          }
         }
 
         const unresolvedCount = (issuesResult.data || []).filter(
@@ -106,6 +154,7 @@ export default function DashboardPage() {
           totalProjects: projectsResult.length,
           totalLogs,
           errorLogs,
+          activeUsers,
         });
 
         setRecentIssues(issuesResult.data || []);
@@ -168,7 +217,17 @@ export default function DashboardPage() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard
+            title="Active Users"
+            value={stats?.activeUsers?.now ?? 0}
+            subtitle={`${stats?.activeUsers?.today ?? 0} today`}
+            loading={loading}
+            icon={Users}
+            iconBg="bg-green-500/10"
+            iconColor="text-green-400"
+            onClick={() => router.push('/sessions')}
+          />
           <StatCard
             title="Unresolved Issues"
             value={stats?.unresolvedIssues}

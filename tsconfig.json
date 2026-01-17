@@ -23,6 +23,9 @@
     },
     {
       "path": "./packages/observability/sdk-node"
+    },
+    {
+      "path": "./packages/observability/sdk-browser"
     }
   ]
 }

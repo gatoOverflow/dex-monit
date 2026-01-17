@@ -51,6 +51,7 @@ export interface ClickHouseIssue {
   type: string;
   level: string;
   status: string;
+  platform: string;
   first_seen: string;
   last_seen: string;
   event_count: number;
@@ -85,6 +86,7 @@ export class EventsClickHouseService {
       culprit,
       type: event.exception?.type || 'Error',
       level: event.level,
+      platform: event.platform || 'node',
       environment: event.environment,
       release: event.release,
       stacktrace: event.exception?.stacktrace,
@@ -149,12 +151,13 @@ export class EventsClickHouseService {
     culprit: string | null;
     type: string;
     level: string;
+    platform?: string;
     environment?: string;
     release?: string;
     stacktrace?: unknown[];
     eventId: string;
   }): Promise<{ issue: ClickHouseIssue; isNew: boolean }> {
-    const { projectId, fingerprint, title, culprit, type, level, environment, release, stacktrace, eventId } = params;
+    const { projectId, fingerprint, title, culprit, type, level, platform, environment, release, stacktrace, eventId } = params;
 
     // Check if issue exists
     const existing = await this.clickhouse.query<ClickHouseIssue>(
@@ -217,6 +220,7 @@ export class EventsClickHouseService {
       type,
       level: level.toUpperCase(),
       status: 'UNRESOLVED',
+      platform: platform || 'node',
       first_seen: now,
       last_seen: now,
       event_count: 1,

@@ -9,6 +9,10 @@ export {
   setTag,
   setTags,
   setDeviceContext,
+  setDeviceInfo,
+  getSessionId,
+  trackScreen,
+  trackAction,
   close,
 } from './lib/client';
 

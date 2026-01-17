@@ -19,6 +19,7 @@ import {
   Zap,
   Search,
   Activity,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
@@ -33,9 +34,10 @@ interface NavItem {
 
 const mainNavigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Sessions', href: '/sessions', icon: Activity },
   { label: 'Issues', href: '/issues', icon: AlertTriangle },
   { label: 'Logs', href: '/logs', icon: FileText },
-  { label: 'Traces', href: '/traces', icon: Activity },
+  { label: 'Traces', href: '/traces', icon: Globe },
 ];
 
 const manageNavigation: NavItem[] = [

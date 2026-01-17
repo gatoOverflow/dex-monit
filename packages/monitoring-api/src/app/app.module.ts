@@ -21,6 +21,7 @@ import { AlertsModule } from '../modules/alerts/index.js';
 import { ReleasesModule } from '../modules/releases/index.js';
 import { TracesModule } from '../modules/traces/traces.module.js';
 import { SettingsModule } from '../modules/settings/index.js';
+import { SessionsModule } from '../modules/sessions/index.js';
 import { HealthModule } from '../modules/health/health.module.js';
 
 @Module({
@@ -71,6 +72,9 @@ import { HealthModule } from '../modules/health/health.module.js';
 
     // Settings & Integrations
     SettingsModule,
+
+    // User Analytics
+    SessionsModule,
 
     // Health & Monitoring
     HealthModule,

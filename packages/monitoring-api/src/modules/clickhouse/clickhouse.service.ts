@@ -1,4 +1,10 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Inject, Logger as NestLogger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Inject,
+  Logger as NestLogger,
+} from '@nestjs/common';
 import { createClient, ClickHouseClient } from '@clickhouse/client';
 import { Logger } from '@dex-monit/observability-logger';
 
@@ -15,7 +21,9 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     if (!CLICKHOUSE_ENABLED) {
-      this.nestLogger.warn('ClickHouse disabled (set CLICKHOUSE_ENABLED=true to enable)');
+      this.nestLogger.warn(
+        'ClickHouse disabled (set CLICKHOUSE_ENABLED=true to enable)',
+      );
       return;
     }
 
@@ -31,8 +39,12 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
       this.connected = true;
       this.logger.info('ClickHouse connected and schema initialized');
     } catch (error) {
-      this.nestLogger.warn(`Failed to connect to ClickHouse: ${error instanceof Error ? error.message : error}`);
-      this.nestLogger.warn('Continuing without ClickHouse (time-series storage disabled)');
+      this.nestLogger.warn(
+        `Failed to connect to ClickHouse: ${error instanceof Error ? error.message : error}`,
+      );
+      this.nestLogger.warn(
+        'Continuing without ClickHouse (time-series storage disabled)',
+      );
       this.client = null;
     }
   }
@@ -226,6 +238,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
           type String,
           level LowCardinality(String),
           status LowCardinality(String) DEFAULT 'UNRESOLVED',
+          platform LowCardinality(String) DEFAULT 'node',
           
           first_seen DateTime64(3),
           last_seen DateTime64(3),
@@ -244,6 +257,133 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         )
         ENGINE = ReplacingMergeTree(updated_at)
         ORDER BY (project_id, fingerprint)
+      `,
+    });
+
+    // Add platform column if not exists (migration for existing tables)
+    await this.client
+      .command({
+        query: `ALTER TABLE dex_monitoring.issues ADD COLUMN IF NOT EXISTS platform LowCardinality(String) DEFAULT 'node'`,
+      })
+      .catch(() => {});
+
+    // Sessions table - track user sessions
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.sessions (
+          id UUID DEFAULT generateUUIDv4(),
+          project_id String,
+          session_id String,
+          user_id String,
+          
+          -- Session info
+          started_at DateTime64(3),
+          ended_at DateTime64(3),
+          last_activity DateTime64(3),
+          duration_ms UInt64 DEFAULT 0,
+          is_active UInt8 DEFAULT 1,
+          
+          -- Device/Client info
+          platform LowCardinality(String),
+          device_type LowCardinality(String),
+          device_brand String DEFAULT '',
+          device_model String DEFAULT '',
+          os_name String,
+          os_version String,
+          app_version String,
+          browser String,
+          browser_version String,
+          
+          -- Location (from IP)
+          ip String,
+          country LowCardinality(String),
+          city String,
+          
+          -- Metrics
+          page_views UInt32 DEFAULT 0,
+          events_count UInt32 DEFAULT 0,
+          errors_count UInt32 DEFAULT 0,
+          
+          -- Entry/Exit
+          entry_page String,
+          exit_page String,
+          
+          -- UTM/Referrer
+          referrer String,
+          utm_source String,
+          utm_medium String,
+          utm_campaign String,
+          
+          INDEX idx_user user_id TYPE bloom_filter GRANULARITY 1,
+          INDEX idx_platform platform TYPE set(10) GRANULARITY 1
+        )
+        ENGINE = ReplacingMergeTree(last_activity)
+        PARTITION BY toYYYYMM(started_at)
+        ORDER BY (project_id, session_id)
+        TTL started_at + INTERVAL 90 DAY
+      `,
+    });
+
+    // Page views / Screen views table
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.page_views (
+          id UUID DEFAULT generateUUIDv4(),
+          project_id String,
+          session_id String,
+          user_id String,
+          
+          -- View info
+          timestamp DateTime64(3),
+          page_url String,
+          page_path String,
+          page_title String,
+          screen_name String,
+          
+          -- Performance
+          load_time_ms UInt32,
+          dom_ready_ms UInt32,
+          
+          -- Interaction
+          time_on_page_ms UInt32 DEFAULT 0,
+          scroll_depth UInt8 DEFAULT 0,
+          interactions UInt32 DEFAULT 0,
+          
+          -- Context
+          referrer String,
+          previous_page String,
+          
+          -- Device
+          viewport_width UInt16,
+          viewport_height UInt16,
+          
+          INDEX idx_session session_id TYPE bloom_filter GRANULARITY 1,
+          INDEX idx_path page_path TYPE bloom_filter GRANULARITY 1
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (project_id, timestamp, session_id)
+        TTL timestamp + INTERVAL 30 DAY
+      `,
+    });
+
+    // User activity heartbeats (for real-time active users)
+    await this.client.command({
+      query: `
+        CREATE TABLE IF NOT EXISTS dex_monitoring.user_activity (
+          project_id String,
+          user_id String,
+          session_id String,
+          timestamp DateTime64(3),
+          activity_type LowCardinality(String),
+          page_path String,
+          
+          INDEX idx_user user_id TYPE bloom_filter GRANULARITY 1
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toDate(timestamp)
+        ORDER BY (project_id, timestamp)
+        TTL timestamp + INTERVAL 7 DAY
       `,
     });
 
@@ -288,26 +428,60 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
   /**
    * Execute a query and return results
    */
-  async query<T>(query: string, params?: Record<string, unknown>): Promise<T[]> {
+  async query<T>(
+    query: string,
+    params?: Record<string, unknown>,
+  ): Promise<T[]> {
     if (!this.client) return [];
     try {
+      // Process query params to convert timestamps
+      const processedParams = params
+        ? this.processQueryParams(params)
+        : undefined;
+
       const result = await this.client.query({
         query,
-        query_params: params,
+        query_params: processedParams,
         format: 'JSONEachRow',
       });
       return result.json<T>();
     } catch (error) {
-      this.nestLogger.error(`ClickHouse query failed: ${error instanceof Error ? error.message : error}`);
+      this.nestLogger.error(
+        `ClickHouse query failed: ${error instanceof Error ? error.message : error}`,
+      );
       return [];
     }
+  }
+
+  /**
+   * Process query parameters (convert ISO timestamps to ClickHouse format)
+   */
+  private processQueryParams(
+    params: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const processed: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(params)) {
+      // Check if value looks like an ISO timestamp
+      if (
+        typeof value === 'string' &&
+        /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)
+      ) {
+        processed[key] = this.formatTimestamp(value);
+      } else if (value instanceof Date) {
+        processed[key] = this.formatTimestamp(value);
+      } else {
+        processed[key] = value;
+      }
+    }
+    return processed;
   }
 
   /**
    * Convert ISO timestamp to ClickHouse format
    */
   private formatTimestamp(value: unknown): string {
-    if (!value) return new Date().toISOString().replace('T', ' ').replace('Z', '');
+    if (!value)
+      return new Date().toISOString().replace('T', ' ').replace('Z', '');
     if (typeof value === 'string') {
       // Convert ISO format to ClickHouse format: "2026-01-16T01:49:19.000Z" -> "2026-01-16 01:49:19.000"
       return value.replace('T', ' ').replace('Z', '');
@@ -322,12 +496,23 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
    * Process values for ClickHouse (convert timestamps, etc.)
    */
   private processValues<T extends Record<string, unknown>>(values: T[]): T[] {
-    const timestampFields = ['timestamp', 'received_at', 'created_at', 'updated_at', 'first_seen', 'last_seen'];
-    
-    return values.map(row => {
-      const processed = { ...row };
+    // All possible timestamp field names used across tables
+    const timestampFields = [
+      'timestamp',
+      'received_at',
+      'created_at',
+      'updated_at',
+      'first_seen',
+      'last_seen',
+      'started_at',
+      'ended_at',
+      'last_activity',
+    ];
+
+    return values.map((row) => {
+      const processed: Record<string, unknown> = { ...row };
       for (const field of timestampFields) {
-        if (field in processed) {
+        if (field in processed && processed[field]) {
           processed[field] = this.formatTimestamp(processed[field]);
         }
       }
@@ -351,7 +536,9 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         format: 'JSONEachRow',
       });
     } catch (error) {
-      this.nestLogger.error(`ClickHouse insert failed: ${error instanceof Error ? error.message : error}`);
+      this.nestLogger.error(
+        `ClickHouse insert failed: ${error instanceof Error ? error.message : error}`,
+      );
     }
   }
 
@@ -363,7 +550,9 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client.command({ query });
     } catch (error) {
-      this.nestLogger.error(`ClickHouse command failed: ${error instanceof Error ? error.message : error}`);
+      this.nestLogger.error(
+        `ClickHouse command failed: ${error instanceof Error ? error.message : error}`,
+      );
     }
   }
 }

@@ -82,24 +82,63 @@ export default function LogsPage() {
       setLoading(true);
       setError(null);
 
-      const result = await logsApi.list({
-        projectId: projectFilter !== 'all' ? projectFilter : undefined,
-        level: levelFilter !== 'all' ? levelFilter : undefined,
-        search: search || undefined,
-        page,
-        pageSize: 50,
-      });
+      // If a specific project is selected, use it
+      if (projectFilter !== 'all') {
+        const result = await logsApi.list({
+          projectId: projectFilter,
+          level: levelFilter !== 'all' ? levelFilter : undefined,
+          search: search || undefined,
+          page,
+          pageSize: 50,
+        });
 
-      setLogs(result.data);
-      setTotalPages(result.meta.totalPages);
-      setTotal(result.meta.total);
+        setLogs(result.data);
+        setTotalPages(result.meta.totalPages);
+        setTotal(result.meta.total);
+      } else {
+        // Load logs from all user's projects
+        if (projects.length === 0) {
+          setLogs([]);
+          setTotalPages(0);
+          setTotal(0);
+          return;
+        }
+
+        // Fetch logs from all projects and combine
+        const logsPromises = projects.slice(0, 10).map((p) =>
+          logsApi.list({
+            projectId: p.id,
+            level: levelFilter !== 'all' ? levelFilter : undefined,
+            search: search || undefined,
+            page: 1,
+            pageSize: 50,
+          }).catch(() => ({
+            data: [] as Log[],
+            meta: { total: 0, page: 1, pageSize: 50, totalPages: 0 },
+          }))
+        );
+
+        const allLogsResults = await Promise.all(logsPromises);
+
+        // Combine and sort all logs by timestamp
+        const allLogs = allLogsResults
+          .flatMap((r) => r.data)
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 50);
+
+        const totalLogs = allLogsResults.reduce((sum, r) => sum + (r.meta?.total || 0), 0);
+
+        setLogs(allLogs);
+        setTotalPages(Math.ceil(totalLogs / 50));
+        setTotal(totalLogs);
+      }
     } catch (err) {
       console.error('Failed to load logs:', err);
       setError('Failed to load logs');
     } finally {
       setLoading(false);
     }
-  }, [user, projectFilter, levelFilter, search, page]);
+  }, [user, projects, projectFilter, levelFilter, search, page]);
 
   useEffect(() => {
     const loadProjects = async () => {

@@ -20,6 +20,9 @@ import {
   ArrowRight,
   Terminal,
   AlertCircle,
+  Smartphone,
+  Monitor,
+  Cpu,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppLayout } from '@/components/AppLayout';
@@ -49,6 +52,20 @@ const levelConfig: Record<string, { bg: string; text: string; border: string; do
   INFO: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20', dot: 'bg-blue-500' },
   DEBUG: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20', dot: 'bg-purple-500' },
 };
+
+const platformConfig: Record<string, { icon: typeof Smartphone; label: string; color: string; bg: string }> = {
+  'react-native': { icon: Smartphone, label: 'React Native', color: 'text-green-400', bg: 'bg-green-500/10' },
+  'node': { icon: Server, label: 'Node.js', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  'browser': { icon: Globe, label: 'Browser', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  'javascript': { icon: Globe, label: 'Browser', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  'unknown': { icon: Monitor, label: 'Unknown', color: 'text-muted-foreground', bg: 'bg-muted' },
+};
+
+function getPlatformConfig(platform?: string) {
+  if (!platform) return platformConfig.unknown;
+  const key = platform.toLowerCase();
+  return platformConfig[key] || platformConfig.unknown;
+}
 
 interface StackFrame {
   filename: string;
@@ -230,6 +247,17 @@ export default function IssueDetailPage() {
                   >
                     {issue.status.toLowerCase()}
                   </Badge>
+                  {/* Platform Badge */}
+                  {(() => {
+                    const platformCfg = getPlatformConfig(issue.platform);
+                    const PlatformIcon = platformCfg.icon;
+                    return (
+                      <Badge className={`${platformCfg.bg} ${platformCfg.color} border-0`}>
+                        <PlatformIcon className="mr-1 h-3 w-3" />
+                        {platformCfg.label}
+                      </Badge>
+                    );
+                  })()}
                   <button
                     onClick={copyIssueId}
                     className="flex items-center gap-1.5 font-mono text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -625,10 +653,46 @@ export default function IssueDetailPage() {
                         <div className="px-6 py-3">
                           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Device</p>
                           <div className="space-y-1 text-sm">
-                            <p><span className="text-muted-foreground">Arch:</span> {latestEvent.contexts.device.arch}</p>
-                            <p><span className="text-muted-foreground">CPUs:</span> {latestEvent.contexts.device.cpus}</p>
+                            {latestEvent.contexts.device.arch && (
+                              <p><span className="text-muted-foreground">Arch:</span> {latestEvent.contexts.device.arch}</p>
+                            )}
+                            {latestEvent.contexts.device.cpus && (
+                              <p><span className="text-muted-foreground">CPUs:</span> {latestEvent.contexts.device.cpus}</p>
+                            )}
                             {latestEvent.contexts.device.hostname && (
                               <p><span className="text-muted-foreground">Host:</span> {latestEvent.contexts.device.hostname}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {/* Mobile Device Info (from extra.deviceInfo) */}
+                      {latestEvent.contexts.extra?.deviceInfo && (
+                        <div className="px-6 py-3">
+                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+                            <Smartphone className="inline h-3 w-3 mr-1" />
+                            Mobile Device
+                          </p>
+                          <div className="space-y-1 text-sm">
+                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).model && (
+                              <p><span className="text-muted-foreground">Model:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).model)}</p>
+                            )}
+                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).brand && (
+                              <p><span className="text-muted-foreground">Brand:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).brand)}</p>
+                            )}
+                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).systemName && (
+                              <p><span className="text-muted-foreground">OS:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).systemName)} {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).systemVersion || '')}</p>
+                            )}
+                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).appVersion && (
+                              <p><span className="text-muted-foreground">App Version:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).appVersion)}</p>
+                            )}
+                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).buildNumber && (
+                              <p><span className="text-muted-foreground">Build:</span> {String((latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).buildNumber)}</p>
+                            )}
+                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).isTablet !== undefined && (
+                              <p><span className="text-muted-foreground">Type:</span> {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).isTablet ? 'Tablet' : 'Phone'}</p>
+                            )}
+                            {(latestEvent.contexts.extra.deviceInfo as Record<string, unknown>).isEmulator && (
+                              <Badge variant="outline" className="mt-1 text-yellow-500 border-yellow-500/30">Emulator</Badge>
                             )}
                           </div>
                         </div>

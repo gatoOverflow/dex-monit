@@ -402,6 +402,7 @@ export const issuesApi = {
     projectId?: string;
     status?: string;
     level?: string;
+    platform?: string;
     page?: number;
     pageSize?: number;
     sortBy?: string;
@@ -411,6 +412,7 @@ export const issuesApi = {
     if (params?.projectId) query.set('projectId', params.projectId);
     if (params?.status) query.set('status', params.status);
     if (params?.level) query.set('level', params.level);
+    if (params?.platform) query.set('platform', params.platform);
     if (params?.page) query.set('page', String(params.page));
     if (params?.pageSize) query.set('pageSize', String(params.pageSize));
     if (params?.sortBy) query.set('sortBy', params.sortBy);
@@ -808,6 +810,110 @@ export const settingsApi = {
   },
 };
 
+// Sessions API
+export interface Session {
+  id: string;
+  sessionId: string;
+  userId: string;
+  startedAt: string;
+  endedAt: string;
+  lastActivity: string;
+  durationMs: number;
+  isActive: boolean;
+  platform: string;
+  deviceType: string;
+  deviceBrand: string;
+  deviceModel: string;
+  osName: string;
+  osVersion: string;
+  appVersion: string;
+  browser: string;
+  browserVersion: string;
+  ip: string;
+  country: string;
+  city: string;
+  pageViews: number;
+  eventsCount: number;
+  errorsCount: number;
+  entryPage: string;
+  exitPage: string;
+  referrer: string;
+}
+
+export interface ActiveUsersStats {
+  now: number;
+  last5m: number;
+  last15m: number;
+  last30m: number;
+  last1h: number;
+  today: number;
+  thisWeek: number;
+  thisMonth: number;
+}
+
+export interface SessionStats {
+  totalSessions: number;
+  activeSessions: number;
+  avgDurationMs: number;
+  avgPageViews: number;
+  bounceRate: number;
+  byPlatform: Record<string, number>;
+  byDevice: Record<string, number>;
+  byCountry: Record<string, number>;
+}
+
+export interface TopPage {
+  path: string;
+  views: number;
+  avgTimeMs: number;
+}
+
+export const sessionsApi = {
+  async getActiveUsers(projectId: string): Promise<ActiveUsersStats> {
+    return fetchApi<ActiveUsersStats>(`/sessions/active-users?projectId=${projectId}`);
+  },
+
+  async getStats(projectId: string, from?: string, to?: string): Promise<SessionStats> {
+    const query = new URLSearchParams({ projectId });
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    return fetchApi<SessionStats>(`/sessions/stats?${query.toString()}`);
+  },
+
+  async getTopPages(projectId: string, limit?: number, from?: string, to?: string): Promise<TopPage[]> {
+    const query = new URLSearchParams({ projectId });
+    if (limit) query.set('limit', String(limit));
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    return fetchApi<TopPage[]>(`/sessions/top-pages?${query.toString()}`);
+  },
+
+  async list(params: {
+    projectId: string;
+    userId?: string;
+    isActive?: boolean;
+    platform?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedResponse<Session>> {
+    const query = new URLSearchParams({ projectId: params.projectId });
+    if (params.userId) query.set('userId', params.userId);
+    if (typeof params.isActive === 'boolean') query.set('isActive', String(params.isActive));
+    if (params.platform) query.set('platform', params.platform);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    return fetchApi<PaginatedResponse<Session>>(`/sessions?${query.toString()}`);
+  },
+
+  async get(sessionId: string, projectId: string): Promise<Session | null> {
+    return fetchApi<Session | null>(`/sessions/${sessionId}?projectId=${projectId}`);
+  },
+};
+
 // Default export for convenience
 export const api = {
   auth: authApi,
@@ -820,6 +926,7 @@ export const api = {
   alertRules: alertRulesApi,
   traces: tracesApi,
   settings: settingsApi,
+  sessions: sessionsApi,
 };
 
 export default api;

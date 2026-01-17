@@ -1,8 +1,8 @@
-import type { 
-  ErrorEvent, 
-  LogEvent, 
-  Breadcrumb, 
-  StackFrame, 
+import type {
+  ErrorEvent,
+  LogEvent,
+  Breadcrumb,
+  StackFrame,
   Severity,
   DeviceContext as ContractDeviceContext,
 } from '@dex-monit/observability-contracts';
@@ -58,6 +58,9 @@ interface InternalState {
   user: UserContext | null;
   tags: Record<string, string>;
   device: DeviceContext | null;
+  sessionId: string | null;
+  currentScreen: string | null;
+  heartbeatInterval: ReturnType<typeof setInterval> | null;
 }
 
 const state: InternalState = {
@@ -67,6 +70,9 @@ const state: InternalState = {
   user: null,
   tags: {},
   device: null,
+  sessionId: null,
+  currentScreen: null,
+  heartbeatInterval: null,
 };
 
 const SDK_NAME = '@dex-monit/observability-sdk-react-native';
@@ -100,20 +106,45 @@ export function init(config: DexMonitoringConfig): void {
   // Try to get device info if React Native is available
   detectDeviceInfo();
 
+  // Start a session
+  startSession();
+
   if (state.config.debug) {
     console.log('[DexMonitoring] Initialized with config:', {
       apiUrl: state.config.apiUrl,
       environment: state.config.environment,
       release: state.config.release,
+      sessionId: state.sessionId,
     });
   }
 }
 
 /**
- * Set user context
+ * Set user context and update current session
  */
 export function setUser(user: UserContext | null): void {
   state.user = user;
+
+  // Update session with new user info
+  if (state.config && state.sessionId && user) {
+    fetch(`${state.config.apiUrl}/sessions/identify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Dex-Key': state.config.apiKey,
+      },
+      body: JSON.stringify({
+        sessionId: state.sessionId,
+        userId: user.id || user.email || user.username,
+        userEmail: user.email,
+        userName: user.username,
+      }),
+    }).catch((err) => {
+      if (state.config?.debug) {
+        console.warn('[DexMonitoring] Failed to identify user:', err);
+      }
+    });
+  }
 }
 
 /**
@@ -164,7 +195,9 @@ function toSeverity(level: string): Severity {
 /**
  * Convert local DeviceContext to contract DeviceContext
  */
-function toContractDeviceContext(device: DeviceContext | null): ContractDeviceContext | undefined {
+function toContractDeviceContext(
+  device: DeviceContext | null,
+): ContractDeviceContext | undefined {
   if (!device) return undefined;
   return {
     arch: device.model,
@@ -177,7 +210,7 @@ function toContractDeviceContext(device: DeviceContext | null): ContractDeviceCo
  */
 export async function captureException(
   error: Error | string,
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): Promise<string | null> {
   if (!state.initialized || !state.config) {
     console.warn('[DexMonitoring] Not initialized. Call init() first.');
@@ -213,11 +246,13 @@ export async function captureException(
     breadcrumbs: [...state.breadcrumbs],
     contexts: {
       device: toContractDeviceContext(state.device),
-      user: state.user ? {
-        id: state.user.id,
-        email: state.user.email,
-        username: state.user.username,
-      } : undefined,
+      user: state.user
+        ? {
+            id: state.user.id,
+            email: state.user.email,
+            username: state.user.username,
+          }
+        : undefined,
       tags: { ...state.tags },
       extra: {
         ...context,
@@ -257,7 +292,7 @@ export async function captureException(
 export async function captureMessage(
   message: string,
   level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' = 'INFO',
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): Promise<string | null> {
   if (!state.initialized || !state.config) {
     console.warn('[DexMonitoring] Not initialized. Call init() first.');
@@ -282,11 +317,13 @@ export async function captureMessage(
     breadcrumbs: [...state.breadcrumbs],
     contexts: {
       device: toContractDeviceContext(state.device),
-      user: state.user ? {
-        id: state.user.id,
-        email: state.user.email,
-        username: state.user.username,
-      } : undefined,
+      user: state.user
+        ? {
+            id: state.user.id,
+            email: state.user.email,
+            username: state.user.username,
+          }
+        : undefined,
       tags: { ...state.tags },
       extra: {
         ...context,
@@ -305,7 +342,7 @@ export async function captureMessage(
 export async function captureLog(
   level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR',
   message: string,
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
 ): Promise<void> {
   if (!state.initialized || !state.config) {
     return;
@@ -333,15 +370,189 @@ export function setDeviceContext(device: DeviceContext): void {
 }
 
 /**
+ * Get current session ID
+ */
+export function getSessionId(): string | null {
+  return state.sessionId;
+}
+
+/**
+ * Track a screen view
+ */
+export async function trackScreen(
+  screenName: string,
+  params?: Record<string, unknown>,
+): Promise<void> {
+  if (!state.initialized || !state.config) return;
+
+  state.currentScreen = screenName;
+
+  // Add breadcrumb
+  addBreadcrumb({
+    type: 'navigation',
+    category: 'screen',
+    message: screenName,
+    data: params,
+    level: 'info',
+  });
+
+  // Send page view to backend
+  try {
+    await fetch(`${state.config.apiUrl}/sessions/pageview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Dex-Key': state.config.apiKey,
+      },
+      body: JSON.stringify({
+        sessionId: state.sessionId,
+        userId: state.user?.id,
+        screenName,
+        previousPage: state.currentScreen,
+      }),
+    });
+  } catch {
+    // Silent fail
+  }
+
+  if (state.config.debug) {
+    console.log('[DexMonitoring] Screen tracked:', screenName);
+  }
+}
+
+/**
+ * Track a user action/interaction
+ */
+export function trackAction(
+  action: string,
+  category: string = 'ui.action',
+  data?: Record<string, unknown>,
+): void {
+  addBreadcrumb({
+    type: 'default',
+    category,
+    message: action,
+    data,
+    level: 'info',
+  });
+}
+
+/**
  * Clear all data and reset SDK
  */
 export function close(): void {
+  // End session
+  endSession();
+
+  // Stop heartbeat
+  if (state.heartbeatInterval) {
+    clearInterval(state.heartbeatInterval);
+    state.heartbeatInterval = null;
+  }
+
   state.initialized = false;
   state.config = null;
   state.breadcrumbs = [];
   state.user = null;
   state.tags = {};
   state.device = null;
+  state.sessionId = null;
+  state.currentScreen = null;
+}
+
+// ============================================
+// Session Management
+// ============================================
+
+function startSession(): void {
+  if (!state.config) return;
+
+  // Generate session ID
+  state.sessionId = generateEventId();
+
+  // Build session data with all available device info
+  const sessionData = {
+    sessionId: state.sessionId,
+    userId: state.user?.id,
+    platform: 'react-native',
+    deviceType: state.device?.isTablet ? 'tablet' : 'phone',
+    osName: state.device?.systemName,
+    osVersion: state.device?.systemVersion,
+    appVersion: state.device?.appVersion || state.config.release,
+    // Additional device info
+    deviceBrand: state.device?.brand,
+    deviceModel: state.device?.model,
+    bundleId: state.device?.bundleId,
+    buildNumber: state.device?.buildNumber,
+    isEmulator: state.device?.isEmulator,
+  };
+
+  // Send session start to backend
+  fetch(`${state.config.apiUrl}/sessions/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Dex-Key': state.config.apiKey,
+    },
+    body: JSON.stringify(sessionData),
+  }).catch((err) => {
+    if (state.config?.debug) {
+      console.warn('[DexMonitoring] Failed to start session:', err);
+    }
+  });
+
+  // Start heartbeat (every 30 seconds)
+  state.heartbeatInterval = setInterval(() => {
+    sendHeartbeat();
+  }, 30000);
+
+  if (state.config.debug) {
+    console.log(
+      '[DexMonitoring] Session started:',
+      state.sessionId,
+      sessionData,
+    );
+  }
+}
+
+function endSession(): void {
+  if (!state.config || !state.sessionId) return;
+
+  // Send session end to backend
+  fetch(`${state.config.apiUrl}/sessions/end`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Dex-Key': state.config.apiKey,
+    },
+    body: JSON.stringify({
+      sessionId: state.sessionId,
+    }),
+  }).catch(() => {
+    // Silent fail
+  });
+
+  if (state.config?.debug) {
+    console.log('[DexMonitoring] Session ended:', state.sessionId);
+  }
+}
+
+function sendHeartbeat(): void {
+  if (!state.config || !state.sessionId) return;
+
+  fetch(`${state.config.apiUrl}/sessions/heartbeat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Dex-Key': state.config.apiKey,
+    },
+    body: JSON.stringify({
+      sessionId: state.sessionId,
+      currentPage: state.currentScreen,
+    }),
+  }).catch(() => {
+    // Silent fail
+  });
 }
 
 // ============================================
@@ -362,13 +573,16 @@ function setupGlobalErrorHandlers(): void {
   });
 
   // Handle unhandled promise rejections
-  const originalRejectionHandler = (global as Record<string, unknown>).onunhandledrejection as 
-    ((event: { reason: unknown }) => void) | undefined;
+  const originalRejectionHandler = (global as Record<string, unknown>)
+    .onunhandledrejection as ((event: { reason: unknown }) => void) | undefined;
 
-  (global as Record<string, unknown>).onunhandledrejection = (event: { reason: unknown }) => {
-    const error = event.reason instanceof Error
-      ? event.reason
-      : new Error(String(event.reason));
+  (global as Record<string, unknown>).onunhandledrejection = (event: {
+    reason: unknown;
+  }) => {
+    const error =
+      event.reason instanceof Error
+        ? event.reason
+        : new Error(String(event.reason));
 
     captureException(error, { type: 'unhandledrejection' });
 
@@ -381,7 +595,6 @@ function setupGlobalErrorHandlers(): void {
 function detectDeviceInfo(): void {
   try {
     // Try to import react-native dynamically
-    // This will work if react-native is installed
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const RN = require('react-native');
 
@@ -393,22 +606,55 @@ function detectDeviceInfo(): void {
       };
     }
 
-    // Try to get more device info from react-native-device-info if available
+    // Try Expo Device API first (works without extra installation in Expo)
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const DeviceInfo = require('react-native-device-info');
+      const ExpoDevice = require('expo-device');
 
       state.device = {
         ...state.device,
-        model: DeviceInfo.getModel?.(),
-        brand: DeviceInfo.getBrand?.(),
-        appVersion: DeviceInfo.getVersion?.(),
-        buildNumber: DeviceInfo.getBuildNumber?.(),
-        bundleId: DeviceInfo.getBundleId?.(),
-        isEmulator: DeviceInfo.isEmulatorSync?.(),
+        brand: ExpoDevice.brand,
+        model: ExpoDevice.modelName || ExpoDevice.modelId,
+        isTablet: ExpoDevice.deviceType === ExpoDevice.DeviceType?.TABLET,
+        isEmulator: !ExpoDevice.isDevice,
       };
+
+      if (state.config?.debug) {
+        console.log(
+          '[DexMonitoring] Device info from expo-device:',
+          state.device,
+        );
+      }
     } catch {
-      // react-native-device-info not installed, that's ok
+      // expo-device not available, try react-native-device-info
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const DeviceInfo = require('react-native-device-info');
+
+        state.device = {
+          ...state.device,
+          model: DeviceInfo.getModel?.(),
+          brand: DeviceInfo.getBrand?.(),
+          appVersion: DeviceInfo.getVersion?.(),
+          buildNumber: DeviceInfo.getBuildNumber?.(),
+          bundleId: DeviceInfo.getBundleId?.(),
+          isEmulator: DeviceInfo.isEmulatorSync?.(),
+        };
+
+        if (state.config?.debug) {
+          console.log(
+            '[DexMonitoring] Device info from react-native-device-info:',
+            state.device,
+          );
+        }
+      } catch {
+        // Neither library installed - use basic Platform info only
+        if (state.config?.debug) {
+          console.log(
+            '[DexMonitoring] Using basic Platform info only. Install expo-device or react-native-device-info for better device detection.',
+          );
+        }
+      }
     }
   } catch {
     // Not in React Native environment
@@ -416,6 +662,13 @@ function detectDeviceInfo(): void {
       console.log('[DexMonitoring] Not in React Native environment');
     }
   }
+}
+
+/**
+ * Manually set device info (useful if auto-detection doesn't work)
+ */
+export function setDeviceInfo(device: Partial<DeviceContext>): void {
+  state.device = { ...state.device, ...device };
 }
 
 function parseStackTrace(stack?: string): StackFrame[] {
@@ -496,7 +749,13 @@ async function sendLog(log: LogEvent): Promise<void> {
 }
 
 // Declare ErrorUtils for React Native
-declare const ErrorUtils: {
-  getGlobalHandler?: () => ((error: Error, isFatal?: boolean) => void) | undefined;
-  setGlobalHandler?: (handler: (error: Error, isFatal?: boolean) => void) => void;
-} | undefined;
+declare const ErrorUtils:
+  | {
+      getGlobalHandler?: () =>
+        | ((error: Error, isFatal?: boolean) => void)
+        | undefined;
+      setGlobalHandler?: (
+        handler: (error: Error, isFatal?: boolean) => void,
+      ) => void;
+    }
+  | undefined;

@@ -1,13 +1,15 @@
 {
-  "name": "@dex-monit/observability-sdk-react-native",
-  "version": "1.0.5",
-  "description": "React Native SDK for Dex Monitoring - Error tracking for mobile apps",
+  "name": "@dex-monit/observability-sdk-browser",
+  "version": "1.0.0",
+  "description": "Browser SDK for Dex Monitoring - Error tracking for React & Next.js apps",
   "keywords": [
     "observability",
     "monitoring",
-    "react-native",
+    "react",
+    "nextjs",
     "error-tracking",
-    "mobile",
+    "web",
+    "browser",
     "crash-reporting"
   ],
   "author": "Dex Team",
@@ -15,8 +17,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/dex/dex-monit.git",
-    "directory": "packages/observability/sdk-react-native"
+    "directory": "packages/observability/sdk-browser"
   },
+  "type": "commonjs",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -25,6 +28,16 @@
       "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "require": "./dist/react/index.js",
+      "default": "./dist/react/index.js"
+    },
+    "./next": {
+      "types": "./dist/next/index.d.ts",
+      "require": "./dist/next/index.js",
+      "default": "./dist/next/index.js"
     }
   },
   "files": [
@@ -32,30 +45,24 @@
     "README.md"
   ],
   "nx": {
-    "name": "sdk-react-native"
+    "name": "sdk-browser"
   },
   "scripts": {
     "build": "tsc --build tsconfig.lib.json",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@dex-monit/observability-contracts": "^1.0.0",
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
     "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
-    "react-native": ">=0.60.0",
-    "expo-device": ">=5.0.0",
-    "react-native-device-info": ">=10.0.0"
+    "next": ">=13.0.0"
   },
   "peerDependenciesMeta": {
-    "react-native": {
+    "react": {
       "optional": true
     },
-    "expo-device": {
-      "optional": true
-    },
-    "react-native-device-info": {
+    "next": {
       "optional": true
     }
   }

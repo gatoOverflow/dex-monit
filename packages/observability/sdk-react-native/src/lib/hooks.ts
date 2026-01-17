@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { captureException, captureMessage, addBreadcrumb, setUser, UserContext } from './client';
+import { captureException, captureMessage, addBreadcrumb, setUser, trackScreen, trackAction, UserContext } from './client';
 
 interface NavigationRef {
   current: {
@@ -9,7 +9,7 @@ interface NavigationRef {
 }
 
 /**
- * Hook to capture navigation breadcrumbs
+ * Hook to capture navigation breadcrumbs and track screens
  * 
  * @example
  * ```tsx
@@ -29,16 +29,8 @@ export function useDexNavigation(navigationRef: NavigationRef): void {
       const currentRouteName = navigationRef.current?.getCurrentRoute?.()?.name;
 
       if (previousRouteName !== currentRouteName && currentRouteName) {
-        addBreadcrumb({
-          type: 'navigation',
-          category: 'navigation',
-          message: `Navigated to ${currentRouteName}`,
-          level: 'info',
-          data: {
-            from: previousRouteName,
-            to: currentRouteName,
-          },
-        });
+        // Track screen view for analytics
+        trackScreen(currentRouteName, { from: previousRouteName });
 
         routeNameRef.current = currentRouteName;
       }
@@ -158,16 +150,7 @@ export function useDexCapture(defaultContext?: Record<string, unknown>) {
  */
 export function useDexScreenView(screenName: string, params?: Record<string, unknown>): void {
   useEffect(() => {
-    addBreadcrumb({
-      type: 'navigation',
-      category: 'screen',
-      message: `Viewed ${screenName}`,
-      level: 'info',
-      data: {
-        screen: screenName,
-        ...params,
-      },
-    });
+    trackScreen(screenName, params);
   }, [screenName]);
 }
 
@@ -176,24 +159,15 @@ export function useDexScreenView(screenName: string, params?: Record<string, unk
  * 
  * @example
  * ```tsx
- * const trackAction = useDexAction('HomeScreen');
+ * const track = useDexAction('HomeScreen');
  * 
- * <Button onPress={() => trackAction('button_clicked', { buttonId: 'submit' })} />
+ * <Button onPress={() => track('button_clicked', { buttonId: 'submit' })} />
  * ```
  */
 export function useDexAction(component: string): (action: string, data?: Record<string, unknown>) => void {
   return useCallback(
     (action: string, data?: Record<string, unknown>) => {
-      addBreadcrumb({
-        type: 'default',
-        category: 'ui.action',
-        message: action,
-        level: 'info',
-        data: {
-          component,
-          ...data,
-        },
-      });
+      trackAction(action, component, data);
     },
     [component]
   );
