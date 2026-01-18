@@ -1,8 +1,13 @@
 {
   "name": "@dex-monit/observability-contracts",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "TypeScript contracts and interfaces for Dex Monitoring SDK",
-  "keywords": ["observability", "monitoring", "typescript", "contracts"],
+  "keywords": [
+    "observability",
+    "monitoring",
+    "typescript",
+    "contracts"
+  ],
   "author": "Dex Team",
   "license": "MIT",
   "repository": {

@@ -1,8 +1,13 @@
 {
   "name": "@dex-monit/observability-request-context",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AsyncLocalStorage-based request context for Node.js applications",
-  "keywords": ["observability", "request-context", "async-local-storage", "nodejs"],
+  "keywords": [
+    "observability",
+    "request-context",
+    "async-local-storage",
+    "nodejs"
+  ],
   "author": "Dex Team",
   "license": "MIT",
   "repository": {
