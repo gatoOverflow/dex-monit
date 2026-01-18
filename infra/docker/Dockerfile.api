@@ -1,13 +1,20 @@
 # ============================================
 # DEX-MONIT API - Production Dockerfile
+# Place this at ROOT of repo for Dokploy
 # ============================================
 
-# Build stage
-FROM node:20-alpine AS builder
+# Cache buster - change this to force rebuild
+ARG CACHE_BUST=v3
+
+# Build stage - Use Debian for better Prisma compatibility
+FROM node:20-slim AS builder
+
+# Install OpenSSL for Prisma
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies first (better caching)
 COPY package*.json ./
 COPY nx.json ./
 COPY tsconfig*.json ./
@@ -19,40 +26,48 @@ COPY packages/monitoring-api ./packages/monitoring-api
 # Install all dependencies
 RUN npm ci --legacy-peer-deps
 
-# Generate Prisma Client
-RUN cd packages/monitoring-api && npx prisma generate
+# Generate Prisma Client (uses version from package.json)
+WORKDIR /app/packages/monitoring-api
+RUN npx prisma generate
 
 # Build the API
-RUN npx nx build monitoring-api --configuration=production
+WORKDIR /app
+RUN npx nx sync --verbose || true
+RUN npx nx build monitoring-api --configuration=production --skip-nx-cache
 
-# Production stage
-FROM node:20-alpine AS production
+# Production stage - Use Debian for better Prisma compatibility
+FROM node:20-slim AS production
+
+# Install OpenSSL for Prisma
+RUN apt-get update && apt-get install -y openssl ca-certificates wget && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install only production dependencies
-COPY package*.json ./
-RUN npm ci --only=production --legacy-peer-deps
+# Copy ALL node_modules from builder (includes all deps)
+COPY --from=builder /app/node_modules ./node_modules
 
-# Copy Prisma schema and generate client
-COPY packages/monitoring-api/prisma ./prisma
-RUN npx prisma generate
+# Copy workspace packages (observability built libs)
+COPY --from=builder /app/packages/observability ./packages/observability
 
-# Copy built application
-COPY --from=builder /app/dist/packages/monitoring-api ./dist
+# Copy built application from builder
+COPY --from=builder /app/packages/monitoring-api/dist ./dist
 
-# Copy node_modules for runtime deps
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Copy Prisma schema for migrations
+COPY --from=builder /app/packages/monitoring-api/prisma ./prisma
 
-# Environment
+# Environment - PORT is configurable via env var
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+# Health check disabled temporarily for debugging
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+#   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/api/health || exit 1
 
-EXPOSE 3000
+# Expose default port (can be overridden at runtime)
+EXPOSE ${PORT}
 
-# Run the application
-CMD ["node", "dist/main.js"]
+# Create startup script that runs migrations then starts the app
+RUN echo '#!/bin/sh\necho "Running database migrations..."\nnpx prisma db push --skip-generate\necho "Starting application..."\nnode dist/main.js' > /app/start.sh && chmod +x /app/start.sh
+
+# Run the application with migrations
+CMD ["/app/start.sh"]

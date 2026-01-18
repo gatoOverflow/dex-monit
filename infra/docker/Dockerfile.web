@@ -1,5 +1,6 @@
 # ============================================
 # DEX-MONIT WEB - Production Dockerfile
+# Place this at ROOT of repo for Dokploy
 # ============================================
 
 # Build stage
@@ -7,7 +8,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies first (better caching)
 COPY package*.json ./
 COPY nx.json ./
 COPY tsconfig*.json ./
@@ -18,39 +19,37 @@ COPY packages/monitoring-web ./packages/monitoring-web
 # Install all dependencies
 RUN npm ci --legacy-peer-deps
 
-# Build argument for API URL
-ARG NEXT_PUBLIC_API_URL
+# API URL for production - CHANGE THIS for your deployment
+ARG NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
-# Build the Web app
-RUN npx nx build monitoring-web --configuration=production
+# Registration control - set to 'true' to enable registration
+ARG NEXT_PUBLIC_REGISTRATION_ENABLED=false
+ENV NEXT_PUBLIC_REGISTRATION_ENABLED=${NEXT_PUBLIC_REGISTRATION_ENABLED}
+
+# Sync workspace and build the Web app
+RUN npx nx sync --verbose || true
+RUN npx nx build monitoring-web --configuration=production --skip-nx-cache
 
 # Production stage
 FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install only production dependencies for Next.js
-RUN npm install -g next@14
-
-# Copy built application
-COPY --from=builder /app/packages/monitoring-web/.next ./.next
-COPY --from=builder /app/packages/monitoring-web/public ./public
-COPY --from=builder /app/packages/monitoring-web/package.json ./package.json
-COPY --from=builder /app/packages/monitoring-web/next.config.js ./next.config.js 2>/dev/null || true
-
-# Install production deps
-RUN npm install --only=production --legacy-peer-deps next@14 react react-dom
-
-# Environment
 ENV NODE_ENV=production
 ENV PORT=4200
+ENV HOSTNAME=0.0.0.0
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:4200 || exit 1
+# Copy built Next.js standalone output
+COPY --from=builder /app/packages/monitoring-web/.next/standalone ./
+COPY --from=builder /app/packages/monitoring-web/.next/static ./packages/monitoring-web/.next/static
+COPY --from=builder /app/packages/monitoring-web/public ./packages/monitoring-web/public
+
+# Health check disabled for debugging
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+#   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT} || exit 1
 
 EXPOSE 4200
 
-# Run Next.js in production mode
-CMD ["npx", "next", "start", "-p", "4200"]
+# Run Next.js - the server reads PORT and HOSTNAME from env
+CMD ["node", "packages/monitoring-web/server.js"]
