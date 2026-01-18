@@ -118,7 +118,7 @@ A comprehensive, self-hosted observability platform for error tracking, log mana
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/DEXCHANGE-GROUP/dex-monit.git
+git clone https://github.com/Denver-sn/dex-monit.git
 cd dex-monit
 ```
 
