@@ -12,7 +12,7 @@ DEX-MONIT - Dokploy Deployment Guide
 🚀 DEPLOYMENT STEPS
 ===================
 
-1. CREATE SERVICES IN DOKPLOY
+1. CREATE SERVICES IN DOKPLOY/Coolify
 -----------------------------
 
 A) PostgreSQL (si pas déjà configuré)
