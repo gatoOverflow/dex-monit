@@ -12,8 +12,12 @@
 
 .PHONY: help dev dev-apps dev-db prod prod-apps build clean logs ps stop restart
 
-# Detect docker compose command ($(DOCKER_COMPOSE) vs docker compose)
-DOCKER_COMPOSE := $(shell command -v $(DOCKER_COMPOSE) 2> /dev/null || echo "docker compose")
+# Detect docker compose command (docker-compose vs docker compose)
+ifeq ($(shell command -v docker-compose 2> /dev/null),)
+    DOCKER_COMPOSE := docker compose
+else
+    DOCKER_COMPOSE := docker-compose
+endif
 
 # Default target
 help:
