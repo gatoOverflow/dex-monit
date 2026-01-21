@@ -131,7 +131,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (project_id, timestamp, fingerprint)
-        TTL timestamp + INTERVAL 90 DAY
+        TTL toDateTime(timestamp) + INTERVAL 90 DAY
         SETTINGS index_granularity = 8192
       `,
     });
@@ -168,7 +168,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (project_id, timestamp, level)
-        TTL timestamp + INTERVAL 30 DAY
+        TTL toDateTime(timestamp) + INTERVAL 30 DAY
         SETTINGS index_granularity = 8192
       `,
     });
@@ -219,7 +219,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (project_id, timestamp, path)
-        TTL timestamp + INTERVAL 14 DAY
+        TTL toDateTime(timestamp) + INTERVAL 14 DAY
         SETTINGS index_granularity = 8192
       `,
     });
@@ -320,7 +320,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         ENGINE = ReplacingMergeTree(last_activity)
         PARTITION BY toYYYYMM(started_at)
         ORDER BY (project_id, session_id)
-        TTL started_at + INTERVAL 90 DAY
+        TTL toDateTime(started_at) + INTERVAL 90 DAY
       `,
     });
 
@@ -363,7 +363,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (project_id, timestamp, session_id)
-        TTL timestamp + INTERVAL 30 DAY
+        TTL toDateTime(timestamp) + INTERVAL 30 DAY
       `,
     });
 
@@ -383,7 +383,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         ENGINE = MergeTree()
         PARTITION BY toDate(timestamp)
         ORDER BY (project_id, timestamp)
-        TTL timestamp + INTERVAL 7 DAY
+        TTL toDateTime(timestamp) + INTERVAL 7 DAY
       `,
     });
 
@@ -418,7 +418,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
         ENGINE = SummingMergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (project_id, timestamp)
-        TTL timestamp + INTERVAL 365 DAY
+        TTL toDateTime(timestamp) + INTERVAL 365 DAY
       `,
     });
 
