@@ -1,14 +1,17 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import './global.css';
 import { AuthContextProvider } from '@/lib/auth-context';
 
-const geistSans = Geist({
+// Force dynamic rendering to avoid prerendering issues
+export const dynamic = 'force-dynamic';
+
+const inter = Inter({
   subsets: ['latin'],
   variable: '--font-sans',
 });
 
-const geistMono = Geist_Mono({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
 });
@@ -25,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <AuthContextProvider>{children}</AuthContextProvider>
       </body>
     </html>

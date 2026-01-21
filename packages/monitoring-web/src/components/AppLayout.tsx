@@ -60,7 +60,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const NavLink = ({ item }: { item: NavItem }) => {
     const isActive =
-      pathname === item.href || pathname.startsWith(`${item.href}/`);
+      pathname === item.href || (pathname && pathname.startsWith(`${item.href}/`));
     return (
       <Link
         href={item.href}

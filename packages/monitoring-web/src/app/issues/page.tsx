@@ -117,16 +117,16 @@ function IssuesPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState<string>(
-    searchParams.get('projectId') || 'all'
+    searchParams?.get('projectId') || 'all'
   );
   const [statusFilter, setStatusFilter] = useState<string>(
-    searchParams.get('status') || 'all'
+    searchParams?.get('status') || 'all'
   );
   const [levelFilter, setLevelFilter] = useState<string>(
-    searchParams.get('level') || 'all'
+    searchParams?.get('level') || 'all'
   );
   const [platformFilter, setPlatformFilter] = useState<string>(
-    searchParams.get('platform') || 'all'
+    searchParams?.get('platform') || 'all'
   );
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);

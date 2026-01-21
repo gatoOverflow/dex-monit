@@ -11,19 +11,12 @@ import {
   Clock,
   Users,
   Zap,
-  TrendingUp,
-  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppLayout } from '@/components/AppLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  ErrorTrendChart,
-  ErrorDistributionChart,
-  TopErrorsChart,
-} from '@/components/charts';
 import {
   issuesApi,
   projectsApi,
@@ -42,21 +35,6 @@ interface DashboardStats {
   errorLogs: number;
   activeUsers: ActiveUsersStats | null;
   logsByLevel?: Record<string, number>;
-}
-
-// Generate mock trend data for last 24 hours
-function generateTrendData() {
-  const now = new Date();
-  const data = [];
-  for (let i = 23; i >= 0; i--) {
-    const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
-    data.push({
-      timestamp: timestamp.toISOString(),
-      errors: Math.floor(Math.random() * 15) + (i < 12 ? 5 : 10),
-      warnings: Math.floor(Math.random() * 20) + 3,
-    });
-  }
-  return data;
 }
 
 export default function DashboardPage() {
@@ -301,96 +279,6 @@ export default function DashboardPage() {
             iconColor="text-red-400"
           />
         </div>
-
-        {/* Charts Section */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Error Trend Chart */}
-          <div
-            className="animate-fade-in rounded-xl border border-border bg-card p-6"
-            style={{ animationDelay: '75ms' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                  Error Trend
-                </h2>
-                <p className="text-sm text-muted-foreground">Last 24 hours</p>
-              </div>
-            </div>
-            {loading ? (
-              <Skeleton className="h-[300px] w-full" />
-            ) : (
-              <ErrorTrendChart data={generateTrendData()} loading={loading} />
-            )}
-          </div>
-
-          {/* Error Distribution & Top Errors */}
-          <div
-            className="animate-fade-in rounded-xl border border-border bg-card p-6"
-            style={{ animationDelay: '100ms' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  Error Distribution
-                </h2>
-                <p className="text-sm text-muted-foreground">By severity level</p>
-              </div>
-            </div>
-            {loading ? (
-              <Skeleton className="h-[250px] w-full" />
-            ) : (
-              <ErrorDistributionChart
-                data={[
-                  { name: 'Fatal', value: stats?.logsByLevel?.['FATAL'] || 0, color: '#dc2626' },
-                  { name: 'Error', value: stats?.logsByLevel?.['ERROR'] || 0, color: '#f97316' },
-                  { name: 'Warning', value: stats?.logsByLevel?.['WARNING'] || 0, color: '#eab308' },
-                  { name: 'Info', value: stats?.logsByLevel?.['INFO'] || 0, color: '#3b82f6' },
-                  { name: 'Debug', value: stats?.logsByLevel?.['DEBUG'] || 0, color: '#8b5cf6' },
-                ]}
-                loading={loading}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Top Errors Chart */}
-        {recentIssues.length > 0 && (
-          <div
-            className="animate-fade-in rounded-xl border border-border bg-card p-6"
-            style={{ animationDelay: '125ms' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-semibold">Top Errors</h2>
-                <p className="text-sm text-muted-foreground">Most frequent errors by event count</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                onClick={() => router.push('/issues')}
-              >
-                View all
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-            <TopErrorsChart
-              data={recentIssues.slice(0, 5).map((issue) => ({
-                name: issue.title,
-                count: issue.eventCount,
-                level: issue.level,
-              }))}
-              loading={loading}
-              onBarClick={(name) => {
-                const issue = recentIssues.find((i) => i.title === name);
-                if (issue) router.push(`/issues/${issue.id}`);
-              }}
-            />
-          </div>
-        )}
 
         {/* Recent Issues & Quick Actions */}
         <div className="grid gap-6 lg:grid-cols-3">

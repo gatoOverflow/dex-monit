@@ -85,7 +85,7 @@ export default function IssueDetailPage() {
   const [copied, setCopied] = useState(false);
   const [expandedFrames, setExpandedFrames] = useState<Record<number, boolean>>({});
 
-  const issueId = params.id as string;
+  const issueId = params?.id as string;
 
   useEffect(() => {
     if (!authLoading && !user) {

@@ -59,7 +59,7 @@ export default function ProjectDetailPage() {
   const [creating, setCreating] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const projectId = params.id as string;
+  const projectId = params?.id as string;
 
   useEffect(() => {
     if (!authLoading && !user) {
