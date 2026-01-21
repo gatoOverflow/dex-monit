@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL - For configuration data (users, teams, projects, settings)
   postgres:
@@ -29,20 +27,25 @@ services:
       CLICKHOUSE_PASSWORD: ""
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ports:
-      - "8123:8123"  # HTTP interface
-      - "9000:9000"  # Native interface
+      - "8123:8123"
+      - "9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
+    cap_add:
+      - SYS_NICE
+      - NET_ADMIN
+      - IPC_LOCK
     ulimits:
       nofile:
         soft: 262144
         hard: 262144
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # Redis - For caching, queuing, rate limiting
   redis:
@@ -58,6 +61,64 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Monitoring API - NestJS Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: dex-api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://dex:dex_secret@postgres:5432/dex_monitoring
+      JWT_SECRET: dev-secret-key-change-in-production-min-32-chars
+      JWT_EXPIRES_IN: 7d
+      CLICKHOUSE_ENABLED: "true"
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_DATABASE: dex_monitoring
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_PROTOCOL: http
+      REDIS_ENABLED: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ASYNC_INGESTION: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Monitoring Web - Next.js Frontend
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000/api
+        NEXT_PUBLIC_REGISTRATION_ENABLED: "true"
+    container_name: dex-web
+    environment:
+      NODE_ENV: production
+      PORT: 4200
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "4200:4200"
+    depends_on:
+      api:
+        condition: service_healthy
 
   # Redis Commander (optional - for debugging)
   redis-commander:

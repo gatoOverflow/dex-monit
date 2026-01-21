@@ -1,0 +1,74 @@
+# ==============================================================================
+# DEX-MONIT - Production Override
+# ==============================================================================
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# For external databases, set environment variables in .env or pass them:
+#   DATABASE_URL=postgresql://... docker-compose ... up -d api web
+#
+# ==============================================================================
+
+services:
+  # API - Production settings
+  api:
+    restart: always
+    environment:
+      NODE_ENV: production
+      # Override these with your external database URLs
+      DATABASE_URL: ${DATABASE_URL:-postgresql://dex:dex_secret@postgres:5432/dex_monitoring}
+      JWT_SECRET: ${JWT_SECRET:-CHANGE_THIS_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CLICKHOUSE_ENABLED: ${CLICKHOUSE_ENABLED:-true}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-dex_monitoring}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_PROTOCOL: ${CLICKHOUSE_PROTOCOL:-http}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      ASYNC_INGESTION: ${ASYNC_INGESTION:-true}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Web - Production settings
+  web:
+    restart: always
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api}
+        NEXT_PUBLIC_REGISTRATION_ENABLED: ${NEXT_PUBLIC_REGISTRATION_ENABLED:-false}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PostgreSQL - Production settings (optional, for local db)
+  postgres:
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dex_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-dex_monitoring}
+
+  # ClickHouse - Production settings (optional, for local db)
+  clickhouse:
+    restart: always
+
+  # Redis - Production settings (optional, for local db)
+  redis:
+    restart: always
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}

@@ -45,3 +45,7 @@ Thumbs.db
 .next
 out
 .env
+
+# Claude Code
+.claude/
+CLAUDE.md

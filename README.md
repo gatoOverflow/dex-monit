@@ -113,44 +113,43 @@ Track user sessions, page views, and user journeys in real-time.
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Node.js** >= 20.x
-- **npm** >= 10.x  
-- **Docker** (for PostgreSQL, ClickHouse, Redis)
+- **Docker** & **Docker Compose**
 
-### 1. Clone & Install
+### Option 1: One Command Start (Recommended)
 
 ```bash
 git clone https://github.com/Denver-sn/dex-monit.git
-cd dex-monit && npm install
+cd dex-monit
+docker-compose up --build
 ```
 
-### 2. Start Infrastructure
+That's it! Everything starts automatically:
+- PostgreSQL, ClickHouse, Redis
+- Database migrations
+- API and Web frontend
+
+### Option 2: Using Make
 
 ```bash
-docker-compose up -d
+git clone https://github.com/Denver-sn/dex-monit.git
+cd dex-monit
+make dev
 ```
 
-### 3. Initialize Database
-
-```bash
-cd packages/monitoring-api
-npx prisma generate
-npx prisma db push
-```
-
-### 4. Run Applications
-
-```bash
-npx nx run-many -t serve,dev -p monitoring-api,monitoring-web
-```
-
-### 5. Access Your Instance
+### Access Your Instance
 
 | Service | URL |
 |---------|-----|
-| 🌐 Frontend | http://localhost:3001 |
+| 🌐 Frontend | http://localhost:4200 |
 | ⚡ API | http://localhost:3000/api |
-| 📚 Swagger | http://localhost:3000/api/docs |
+| 📊 Health | http://localhost:3000/api/health |
+
+### First Steps
+
+1. Open http://localhost:4200
+2. Click **Register** to create an account
+3. Create a **Project** to get an API key
+4. Integrate an SDK in your application
 
 ---
 
@@ -320,13 +319,50 @@ dex-monit/
 │       └── scrubber/            # Sensitive data scrubber
 │
 ├── assets/                      # Screenshots & images
-├── docker-compose.yml           # Local infrastructure
+├── docker-compose.yml           # Full stack (dev)
+├── docker-compose.prod.yml      # Production overrides
+├── docker-compose.apps.yml      # Apps only (external databases)
 ├── Dockerfile.api               # API production build
 ├── Dockerfile.web               # Frontend production build
+├── Makefile                     # Make commands
 └── nx.json                      # Nx workspace config
 ```
 
-### Useful Commands
+### Make Commands
+
+```bash
+make help           # Show all available commands
+
+# Development
+make dev            # Start full stack (everything in Docker)
+make dev-db         # Start only databases
+make dev-apps       # Start only API + Web (external databases)
+
+# Production
+make prod           # Full stack production
+make prod-apps      # Apps only (external databases)
+
+# Management
+make stop           # Stop all containers
+make restart        # Restart all containers
+make logs           # View all logs
+make logs-api       # View API logs
+make logs-web       # View Web logs
+make ps             # List running containers
+make health         # Check health of all services
+make clean          # Remove containers, volumes, images
+
+# Database
+make db-migrate     # Run Prisma migrations
+make db-studio      # Open Prisma Studio
+make db-reset       # Reset database (WARNING: deletes data)
+
+# Configuration
+make env            # Create .env from template
+make env-prod       # Create production .env template
+```
+
+### Nx Commands
 
 ```bash
 # Build all packages
@@ -336,14 +372,11 @@ npx nx run-many -t build --all
 npx nx build monitoring-api
 npx nx build monitoring-web
 
-# Generate Prisma client
-cd packages/monitoring-api && npx prisma generate
+# Type checking
+npm run typecheck
 
-# Run migrations
-cd packages/monitoring-api && npx prisma db push
-
-# Open Prisma Studio
-cd packages/monitoring-api && npx prisma studio
+# Linting
+npm run lint
 ```
 
 ---
@@ -389,7 +422,51 @@ NEXT_PUBLIC_API_URL=http://localhost:3000/api
 
 ## 🚢 Production Deployment
 
-### Docker Build
+### Option 1: Full Stack (All in Docker)
+
+```bash
+make prod
+# or
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+### Option 2: Apps Only (External Databases)
+
+For production with managed databases (AWS RDS, ClickHouse Cloud, Redis Cloud, etc.):
+
+```bash
+# 1. Create production environment file
+make env-prod
+# Edit .env.prod with your external database URLs
+
+# 2. Start apps only
+docker-compose -f docker-compose.apps.yml --env-file .env.prod up --build -d
+```
+
+**Required environment variables for external databases:**
+
+```env
+# PostgreSQL (required)
+DATABASE_URL=postgresql://user:pass@your-postgres-host:5432/dex_monitoring
+
+# ClickHouse (required)
+CLICKHOUSE_HOST=your-clickhouse-host
+CLICKHOUSE_PORT=8443
+CLICKHOUSE_PASSWORD=your-password
+CLICKHOUSE_PROTOCOL=https
+
+# Redis (required)
+REDIS_HOST=your-redis-host
+REDIS_PASSWORD=your-password
+
+# JWT (required)
+JWT_SECRET=your-super-secret-min-32-chars
+
+# Frontend (required)
+NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
+```
+
+### Docker Build (Manual)
 
 ```bash
 # Build API
@@ -405,9 +482,9 @@ docker build -f Dockerfile.web \
 
 | Endpoint | Description |
 |----------|-------------|
-| \`GET /health\` | Overall health |
-| \`GET /health/live\` | Liveness probe |
-| \`GET /health/ready\` | Readiness probe |
+| `GET /api/health` | Overall health |
+| `GET /api/health/live` | Liveness probe |
+| `GET /api/health/ready` | Readiness probe |
 
 ---
 

@@ -1,0 +1,88 @@
+# ==============================================================================
+# DEX-MONIT - Apps Only (External Databases)
+# ==============================================================================
+#
+# Use this when you have external PostgreSQL, ClickHouse, and Redis.
+#
+# Usage:
+#   docker-compose -f docker-compose.apps.yml up --build
+#
+# Required environment variables in .env:
+#   DATABASE_URL=postgresql://user:pass@host:5432/db
+#   CLICKHOUSE_HOST=your-clickhouse-host
+#   REDIS_HOST=your-redis-host
+#
+# ==============================================================================
+
+services:
+  # Monitoring API - NestJS Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: dex-api
+    restart: always
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      # PostgreSQL (required)
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      # JWT (required)
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # ClickHouse
+      CLICKHOUSE_ENABLED: ${CLICKHOUSE_ENABLED:-true}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:?CLICKHOUSE_HOST is required}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-dex_monitoring}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_PROTOCOL: ${CLICKHOUSE_PROTOCOL:-https}
+      # Redis
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_HOST: ${REDIS_HOST:?REDIS_HOST is required}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      ASYNC_INGESTION: ${ASYNC_INGESTION:-true}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Monitoring Web - Next.js Frontend
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
+        NEXT_PUBLIC_REGISTRATION_ENABLED: ${NEXT_PUBLIC_REGISTRATION_ENABLED:-false}
+    container_name: dex-web
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 4200
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${WEB_PORT:-4200}:4200"
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: dex-network
