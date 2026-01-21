@@ -14,6 +14,9 @@ import {
   Monitor,
   Server,
   Globe,
+  Trash2,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppLayout } from '@/components/AppLayout';
@@ -245,20 +248,81 @@ function IssuesPageContent() {
     setSelectedIssues(newSelection);
   };
 
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   const handleBulkResolve = async () => {
-    for (const id of selectedIssues) {
-      await issuesApi.resolve(id);
+    if (selectedIssues.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const result = await issuesApi.bulkResolve(Array.from(selectedIssues));
+      if (result.failed.length > 0) {
+        setError(`${result.updated} issues resolved, ${result.failed.length} failed`);
+      }
+      setSelectedIssues(new Set());
+      loadIssues();
+    } catch (err) {
+      console.error('Failed to bulk resolve:', err);
+      setError('Failed to resolve issues');
+    } finally {
+      setBulkLoading(false);
     }
-    setSelectedIssues(new Set());
-    loadIssues();
   };
 
   const handleBulkIgnore = async () => {
-    for (const id of selectedIssues) {
-      await issuesApi.ignore(id);
+    if (selectedIssues.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const result = await issuesApi.bulkIgnore(Array.from(selectedIssues));
+      if (result.failed.length > 0) {
+        setError(`${result.updated} issues ignored, ${result.failed.length} failed`);
+      }
+      setSelectedIssues(new Set());
+      loadIssues();
+    } catch (err) {
+      console.error('Failed to bulk ignore:', err);
+      setError('Failed to ignore issues');
+    } finally {
+      setBulkLoading(false);
     }
-    setSelectedIssues(new Set());
-    loadIssues();
+  };
+
+  const handleBulkUnresolve = async () => {
+    if (selectedIssues.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const result = await issuesApi.bulkUnresolve(Array.from(selectedIssues));
+      if (result.failed.length > 0) {
+        setError(`${result.updated} issues reopened, ${result.failed.length} failed`);
+      }
+      setSelectedIssues(new Set());
+      loadIssues();
+    } catch (err) {
+      console.error('Failed to bulk unresolve:', err);
+      setError('Failed to reopen issues');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIssues.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIssues.size} issue(s)? This action cannot be undone.`)) {
+      return;
+    }
+    setBulkLoading(true);
+    try {
+      const result = await issuesApi.bulkDelete(Array.from(selectedIssues));
+      if (result.failed.length > 0) {
+        setError(`${result.deleted} issues deleted, ${result.failed.length} failed`);
+      }
+      setSelectedIssues(new Set());
+      loadIssues();
+    } catch (err) {
+      console.error('Failed to bulk delete:', err);
+      setError('Failed to delete issues');
+    } finally {
+      setBulkLoading(false);
+    }
   };
 
   if (authLoading || !user) {
@@ -284,13 +348,57 @@ function IssuesPageContent() {
               <span className="text-sm text-muted-foreground">
                 {selectedIssues.size} selected
               </span>
-              <Button size="sm" variant="outline" onClick={handleBulkResolve}>
-                <CheckCircle className="mr-2 h-4 w-4" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkResolve}
+                disabled={bulkLoading}
+              >
+                {bulkLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                )}
                 Resolve
               </Button>
-              <Button size="sm" variant="outline" onClick={handleBulkIgnore}>
-                <XCircle className="mr-2 h-4 w-4" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkUnresolve}
+                disabled={bulkLoading}
+              >
+                {bulkLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Reopen
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkIgnore}
+                disabled={bulkLoading}
+              >
+                {bulkLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <XCircle className="mr-2 h-4 w-4" />
+                )}
                 Ignore
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={bulkLoading}
+              >
+                {bulkLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                Delete
               </Button>
             </div>
           )}

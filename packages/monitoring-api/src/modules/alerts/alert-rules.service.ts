@@ -31,7 +31,7 @@ export interface UpdateAlertRuleDto {
 }
 
 export interface AlertAction {
-  type: 'slack' | 'email' | 'webhook' | 'discord';
+  type: 'slack' | 'email' | 'webhook' | 'discord' | 'pagerduty' | 'teams' | 'telegram';
   config: Record<string, unknown>;
 }
 

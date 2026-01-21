@@ -21,3 +21,5 @@ export type {
   UserContext,
   BrowserContext,
 } from './lib/client';
+
+export type { WebVitalsMetric, WebVitalsConfig } from './lib/web-vitals';

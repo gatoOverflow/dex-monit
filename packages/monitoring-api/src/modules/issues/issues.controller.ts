@@ -12,6 +12,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { IssuesClickHouseService, ClickHouseIssue, ListIssuesParams, IssueStats } from './issues-clickhouse.service.js';
 import { IssuesService } from './issues.service.js';
 import { EventsClickHouseService, ClickHouseEvent } from '../events/events-clickhouse.service.js';
@@ -69,6 +70,8 @@ interface RequestWithUser extends Request {
   user: { id: string };
 }
 
+@ApiTags('Issues')
+@ApiBearerAuth('JWT')
 @Controller('issues')
 @UseGuards(AuthGuard('jwt'))
 export class IssuesController {
@@ -353,6 +356,86 @@ export class IssuesController {
   async delete(@Param('id') id: string): Promise<ApiResponse<{ message: string }>> {
     await this.issuesClickHouse.delete(id);
     return { success: true, data: { message: 'Issue deleted' } };
+  }
+
+  /**
+   * POST /issues/bulk/resolve
+   * Resolve multiple issues at once
+   */
+  @Post('bulk/resolve')
+  async bulkResolve(
+    @Body() body: { issueIds: string[] },
+    @Request() req: RequestWithUser
+  ): Promise<ApiResponse<{ updated: number; failed: string[] }>> {
+    const result = await this.issuesClickHouse.bulkUpdateStatus(body.issueIds, 'RESOLVED');
+
+    // Track activity for successfully updated issues
+    const successfulIds = body.issueIds.filter(id => !result.failed.includes(id));
+    for (const issueId of successfulIds) {
+      await this.issuesService.trackActivity(issueId, req.user.id, 'RESOLVED', {
+        action: 'bulk_status_change',
+        newStatus: 'RESOLVED',
+      });
+    }
+
+    return { success: true, data: result };
+  }
+
+  /**
+   * POST /issues/bulk/unresolve
+   * Unresolve multiple issues at once
+   */
+  @Post('bulk/unresolve')
+  async bulkUnresolve(
+    @Body() body: { issueIds: string[] },
+    @Request() req: RequestWithUser
+  ): Promise<ApiResponse<{ updated: number; failed: string[] }>> {
+    const result = await this.issuesClickHouse.bulkUpdateStatus(body.issueIds, 'UNRESOLVED');
+
+    const successfulIds = body.issueIds.filter(id => !result.failed.includes(id));
+    for (const issueId of successfulIds) {
+      await this.issuesService.trackActivity(issueId, req.user.id, 'UNRESOLVED', {
+        action: 'bulk_status_change',
+        newStatus: 'UNRESOLVED',
+      });
+    }
+
+    return { success: true, data: result };
+  }
+
+  /**
+   * POST /issues/bulk/ignore
+   * Ignore multiple issues at once
+   */
+  @Post('bulk/ignore')
+  async bulkIgnore(
+    @Body() body: { issueIds: string[]; reason?: string },
+    @Request() req: RequestWithUser
+  ): Promise<ApiResponse<{ updated: number; failed: string[] }>> {
+    const result = await this.issuesClickHouse.bulkUpdateStatus(body.issueIds, 'IGNORED');
+
+    const successfulIds = body.issueIds.filter(id => !result.failed.includes(id));
+    for (const issueId of successfulIds) {
+      await this.issuesService.trackActivity(issueId, req.user.id, 'IGNORED', {
+        action: 'bulk_status_change',
+        newStatus: 'IGNORED',
+        reason: body.reason,
+      });
+    }
+
+    return { success: true, data: result };
+  }
+
+  /**
+   * POST /issues/bulk/delete
+   * Delete multiple issues at once
+   */
+  @Post('bulk/delete')
+  async bulkDelete(
+    @Body() body: { issueIds: string[] },
+  ): Promise<ApiResponse<{ deleted: number; failed: string[] }>> {
+    const result = await this.issuesClickHouse.bulkDelete(body.issueIds);
+    return { success: true, data: result };
   }
 
   /**

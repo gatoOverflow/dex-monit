@@ -483,6 +483,35 @@ export const issuesApi = {
       body: JSON.stringify({ content }),
     });
   },
+
+  // Bulk operations
+  async bulkResolve(issueIds: string[]) {
+    return fetchApi<{ updated: number; failed: string[] }>(`/issues/bulk/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ issueIds }),
+    });
+  },
+
+  async bulkUnresolve(issueIds: string[]) {
+    return fetchApi<{ updated: number; failed: string[] }>(`/issues/bulk/unresolve`, {
+      method: 'POST',
+      body: JSON.stringify({ issueIds }),
+    });
+  },
+
+  async bulkIgnore(issueIds: string[], reason?: string) {
+    return fetchApi<{ updated: number; failed: string[] }>(`/issues/bulk/ignore`, {
+      method: 'POST',
+      body: JSON.stringify({ issueIds, reason }),
+    });
+  },
+
+  async bulkDelete(issueIds: string[]) {
+    return fetchApi<{ deleted: number; failed: string[] }>(`/issues/bulk/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ issueIds }),
+    });
+  },
 };
 
 // ============================================

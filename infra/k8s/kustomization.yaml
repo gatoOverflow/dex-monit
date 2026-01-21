@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dex-monitoring
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - databases.yaml
+  - api-deployment.yaml
+  - web-deployment.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: dex-monitoring
+  app.kubernetes.io/version: "1.0.0"
+
+# Images can be customized per environment
+images:
+  - name: dex-monitoring-api
+    newName: your-registry/dex-monitoring-api
+    newTag: latest
+  - name: dex-monitoring-web
+    newName: your-registry/dex-monitoring-web
+    newTag: latest

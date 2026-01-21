@@ -40,6 +40,19 @@ export {
   useDexAction,
 } from './lib/hooks';
 
+// Offline Queue
+export {
+  initOfflineQueue,
+  enqueue,
+  getQueueSize,
+  isOnline,
+  flushQueue,
+  clearQueue,
+  closeOfflineQueue,
+} from './lib/offline-queue';
+
+export type { QueuedEvent, OfflineQueueConfig } from './lib/offline-queue';
+
 // Re-export types from contracts
 export type {
   ErrorEvent,

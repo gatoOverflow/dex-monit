@@ -353,7 +353,7 @@ export class IssuesClickHouseService {
     // Update events to point to target issue
     for (const sourceId of sourceIds) {
       await this.clickhouse.command(`
-        ALTER TABLE dex_monitoring.events 
+        ALTER TABLE dex_monitoring.events
         UPDATE issue_id = '${targetId}'
         WHERE issue_id = '${sourceId}'
       `);
@@ -362,7 +362,7 @@ export class IssuesClickHouseService {
     // Delete source issues
     for (const sourceId of sourceIds) {
       await this.clickhouse.command(`
-        ALTER TABLE dex_monitoring.issues 
+        ALTER TABLE dex_monitoring.issues
         DELETE WHERE id = '${sourceId}'
       `);
     }
@@ -373,5 +373,116 @@ export class IssuesClickHouseService {
     this.logger.info('Issues merged', { targetId, sourceIds });
 
     return target;
+  }
+
+  /**
+   * Bulk update status for multiple issues
+   */
+  async bulkUpdateStatus(
+    ids: string[],
+    status: 'UNRESOLVED' | 'RESOLVED' | 'IGNORED',
+  ): Promise<{ updated: number; failed: string[] }> {
+    const failed: string[] = [];
+    let updated = 0;
+    const projectIds = new Set<string>();
+
+    for (const id of ids) {
+      try {
+        const issue = await this.findById(id);
+        if (!issue) {
+          failed.push(id);
+          continue;
+        }
+
+        projectIds.add(issue.project_id);
+
+        // Insert updated issue
+        await this.clickhouse.insert('issues', [
+          {
+            ...issue,
+            status,
+            updated_at: new Date().toISOString(),
+          },
+        ]);
+        updated++;
+      } catch (error) {
+        this.logger.error('Failed to update issue status', { issueId: id, error });
+        failed.push(id);
+      }
+    }
+
+    // Invalidate cache for all affected projects
+    for (const projectId of projectIds) {
+      await this.redis.delPattern(`issues:*${projectId}*`);
+    }
+
+    this.logger.info('Bulk status update completed', { updated, failed: failed.length, status });
+
+    return { updated, failed };
+  }
+
+  /**
+   * Bulk delete multiple issues
+   */
+  async bulkDelete(ids: string[]): Promise<{ deleted: number; failed: string[] }> {
+    const failed: string[] = [];
+    let deleted = 0;
+    const projectIds = new Set<string>();
+
+    for (const id of ids) {
+      try {
+        const issue = await this.findById(id);
+        if (!issue) {
+          failed.push(id);
+          continue;
+        }
+
+        projectIds.add(issue.project_id);
+
+        // Delete issue
+        await this.clickhouse.command(`
+          ALTER TABLE dex_monitoring.issues
+          DELETE WHERE id = '${id}'
+        `);
+
+        // Delete associated events
+        await this.clickhouse.command(`
+          ALTER TABLE dex_monitoring.events
+          DELETE WHERE issue_id = '${id}'
+        `);
+
+        deleted++;
+      } catch (error) {
+        this.logger.error('Failed to delete issue', { issueId: id, error });
+        failed.push(id);
+      }
+    }
+
+    // Invalidate cache for all affected projects
+    for (const projectId of projectIds) {
+      await this.redis.delPattern(`issues:*${projectId}*`);
+    }
+
+    this.logger.info('Bulk delete completed', { deleted, failed: failed.length });
+
+    return { deleted, failed };
+  }
+
+  /**
+   * Get multiple issues by IDs
+   */
+  async findByIds(ids: string[]): Promise<ClickHouseIssue[]> {
+    if (ids.length === 0) return [];
+
+    const placeholders = ids.map((_, i) => `{id${i}:String}`).join(', ');
+    const params: Record<string, string> = {};
+    ids.forEach((id, i) => {
+      params[`id${i}`] = id;
+    });
+
+    return this.clickhouse.query<ClickHouseIssue>(
+      `SELECT * FROM dex_monitoring.issues FINAL WHERE id IN (${placeholders})`,
+      params,
+    );
   }
 }

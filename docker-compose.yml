@@ -85,6 +85,21 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       ASYNC_INGESTION: "false"
+      # Email configuration (optional)
+      SMTP_ENABLED: "false"
+      # SMTP_HOST: smtp.example.com
+      # SMTP_PORT: 587
+      # SMTP_SECURE: "false"
+      # SMTP_USER: your-user
+      # SMTP_PASS: your-password
+      # SMTP_FROM: "Dex Monit <noreply@example.com>"
+      # Data retention configuration (optional)
+      CLEANUP_ENABLED: "false"
+      # CLEANUP_INTERVAL_MS: 21600000  # 6 hours
+      # RETENTION_EVENTS_DAYS: 90
+      # RETENTION_LOGS_DAYS: 30
+      # RETENTION_TRACES_DAYS: 14
+      # RETENTION_SESSIONS_DAYS: 90
     ports:
       - "3000:3000"
     depends_on:

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex-monitoring-config
+  namespace: dex-monitoring
+  labels:
+    app.kubernetes.io/name: dex-monitoring
+data:
+  # API Configuration
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+
+  # Database URLs (credentials in secrets)
+  DATABASE_URL: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/dex_monitoring?schema=public"
+
+  # ClickHouse
+  CLICKHOUSE_HOST: "clickhouse"
+  CLICKHOUSE_PORT: "8123"
+  CLICKHOUSE_DATABASE: "dex_monitoring"
+
+  # Redis
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+
+  # Data Retention (days)
+  RETENTION_EVENTS_DAYS: "90"
+  RETENTION_LOGS_DAYS: "30"
+  RETENTION_TRACES_DAYS: "14"
+  RETENTION_SESSIONS_DAYS: "90"
+  CLEANUP_ENABLED: "true"
+  CLEANUP_CRON: "0 3 * * *"
+
+  # Frontend Configuration
+  NEXT_PUBLIC_API_URL: "https://api.your-domain.com/api"

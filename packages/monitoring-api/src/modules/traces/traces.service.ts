@@ -1,5 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
+import { ClickHouseService } from '../clickhouse/clickhouse.service.js';
+import { RedisService } from '../redis/redis.service.js';
 import { Logger } from '@dex-monit/observability-logger';
 import type { HttpTrace, Prisma } from '@prisma/client';
 
@@ -63,10 +65,15 @@ export interface TraceStats {
   requestsPerMinute: number;
 }
 
+// Cache TTL in seconds
+const STATS_CACHE_TTL = 60; // 1 minute
+
 @Injectable()
 export class TracesService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly clickhouse: ClickHouseService,
+    private readonly redis: RedisService,
     @Inject(Logger) private readonly logger: Logger,
   ) {}
 
@@ -217,8 +224,183 @@ export class TracesService {
 
   /**
    * Get trace statistics for a project
+   * Uses ClickHouse quantile functions when available for better performance
+   * Results are cached in Redis for 1 minute
    */
   async getStats(projectId: string, startDate?: Date, endDate?: Date): Promise<TraceStats> {
+    // Build cache key
+    const cacheKey = `traces:stats:${projectId}:${startDate?.toISOString() || 'all'}:${endDate?.toISOString() || 'now'}`;
+
+    // Try to get from cache
+    return this.redis.getOrSet(
+      cacheKey,
+      () => this.computeStats(projectId, startDate, endDate),
+      STATS_CACHE_TTL,
+    );
+  }
+
+  /**
+   * Compute stats - uses ClickHouse when available, falls back to Prisma
+   */
+  private async computeStats(projectId: string, startDate?: Date, endDate?: Date): Promise<TraceStats> {
+    // Try ClickHouse first for better performance on large datasets
+    if (this.clickhouse.isConnected()) {
+      try {
+        return await this.getStatsFromClickHouse(projectId, startDate, endDate);
+      } catch (error) {
+        this.logger.warn('ClickHouse stats failed, falling back to Prisma', { error });
+      }
+    }
+
+    // Fallback to Prisma (PostgreSQL)
+    return this.getStatsFromPrisma(projectId, startDate, endDate);
+  }
+
+  /**
+   * Get stats from ClickHouse using quantile() functions
+   */
+  private async getStatsFromClickHouse(projectId: string, startDate?: Date, endDate?: Date): Promise<TraceStats> {
+    const startTs = startDate?.toISOString().replace('T', ' ').replace('Z', '') || '2020-01-01 00:00:00';
+    const endTs = endDate?.toISOString().replace('T', ' ').replace('Z', '') || new Date().toISOString().replace('T', ' ').replace('Z', '');
+
+    // Get main stats with quantiles in a single query
+    const mainStats = await this.clickhouse.query<{
+      total: string;
+      avg_duration: string;
+      p50_duration: string;
+      p95_duration: string;
+      p99_duration: string;
+      error_count: string;
+      min_ts: string;
+      max_ts: string;
+    }>(`
+      SELECT
+        count() as total,
+        avg(duration_ms) as avg_duration,
+        quantile(0.50)(duration_ms) as p50_duration,
+        quantile(0.95)(duration_ms) as p95_duration,
+        quantile(0.99)(duration_ms) as p99_duration,
+        countIf(status_code >= 400) as error_count,
+        min(timestamp) as min_ts,
+        max(timestamp) as max_ts
+      FROM dex_monitoring.traces
+      WHERE project_id = {projectId:String}
+        AND timestamp >= {startTs:String}
+        AND timestamp <= {endTs:String}
+    `, { projectId, startTs, endTs });
+
+    const stats = mainStats[0] || {
+      total: '0',
+      avg_duration: '0',
+      p50_duration: '0',
+      p95_duration: '0',
+      p99_duration: '0',
+      error_count: '0',
+      min_ts: startTs,
+      max_ts: endTs,
+    };
+
+    const total = parseInt(stats.total, 10);
+    if (total === 0) {
+      return {
+        total: 0,
+        byMethod: {},
+        byStatus: {},
+        avgDuration: 0,
+        p50Duration: 0,
+        p95Duration: 0,
+        p99Duration: 0,
+        errorRate: 0,
+        slowestEndpoints: [],
+        requestsPerMinute: 0,
+      };
+    }
+
+    // Get counts by method
+    const byMethodResult = await this.clickhouse.query<{ method: string; count: string }>(`
+      SELECT method, count() as count
+      FROM dex_monitoring.traces
+      WHERE project_id = {projectId:String}
+        AND timestamp >= {startTs:String}
+        AND timestamp <= {endTs:String}
+      GROUP BY method
+    `, { projectId, startTs, endTs });
+
+    const byMethod: Record<string, number> = {};
+    for (const row of byMethodResult) {
+      byMethod[row.method] = parseInt(row.count, 10);
+    }
+
+    // Get counts by status category
+    const byStatusResult = await this.clickhouse.query<{ status_category: string; count: string }>(`
+      SELECT concat(toString(intDiv(status_code, 100)), 'xx') as status_category, count() as count
+      FROM dex_monitoring.traces
+      WHERE project_id = {projectId:String}
+        AND timestamp >= {startTs:String}
+        AND timestamp <= {endTs:String}
+      GROUP BY status_category
+    `, { projectId, startTs, endTs });
+
+    const byStatus: Record<string, number> = {};
+    for (const row of byStatusResult) {
+      byStatus[row.status_category] = parseInt(row.count, 10);
+    }
+
+    // Get slowest endpoints
+    const slowestResult = await this.clickhouse.query<{
+      method: string;
+      path: string;
+      avg_duration: string;
+      count: string;
+      error_count: string;
+    }>(`
+      SELECT
+        method,
+        path,
+        avg(duration_ms) as avg_duration,
+        count() as count,
+        countIf(status_code >= 400) as error_count
+      FROM dex_monitoring.traces
+      WHERE project_id = {projectId:String}
+        AND timestamp >= {startTs:String}
+        AND timestamp <= {endTs:String}
+      GROUP BY method, path
+      ORDER BY avg_duration DESC
+      LIMIT 10
+    `, { projectId, startTs, endTs });
+
+    const slowestEndpoints = slowestResult.map((row) => ({
+      method: row.method,
+      path: row.path,
+      avgDuration: Math.round(parseFloat(row.avg_duration)),
+      count: parseInt(row.count, 10),
+      errorCount: parseInt(row.error_count, 10),
+    }));
+
+    // Calculate requests per minute
+    const minTs = new Date(stats.min_ts).getTime();
+    const maxTs = new Date(stats.max_ts).getTime();
+    const timeRangeMs = maxTs - minTs;
+    const requestsPerMinute = timeRangeMs > 0 ? Math.round((total / timeRangeMs) * 60000) : 0;
+
+    return {
+      total,
+      byMethod,
+      byStatus,
+      avgDuration: Math.round(parseFloat(stats.avg_duration)),
+      p50Duration: Math.round(parseFloat(stats.p50_duration)),
+      p95Duration: Math.round(parseFloat(stats.p95_duration)),
+      p99Duration: Math.round(parseFloat(stats.p99_duration)),
+      errorRate: Math.round((parseInt(stats.error_count, 10) / total) * 100),
+      slowestEndpoints,
+      requestsPerMinute,
+    };
+  }
+
+  /**
+   * Get stats from Prisma (PostgreSQL) - fallback method
+   */
+  private async getStatsFromPrisma(projectId: string, startDate?: Date, endDate?: Date): Promise<TraceStats> {
     const where: Prisma.HttpTraceWhereInput = {
       projectId,
       ...(startDate && { timestamp: { gte: startDate } }),

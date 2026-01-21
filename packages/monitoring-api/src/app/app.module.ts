@@ -23,6 +23,7 @@ import { TracesModule } from '../modules/traces/traces.module.js';
 import { SettingsModule } from '../modules/settings/index.js';
 import { SessionsModule } from '../modules/sessions/index.js';
 import { HealthModule } from '../modules/health/health.module.js';
+import { CleanupModule } from '../modules/cleanup/index.js';
 
 @Module({
   imports: [
@@ -78,6 +79,9 @@ import { HealthModule } from '../modules/health/health.module.js';
 
     // Health & Monitoring
     HealthModule,
+
+    // Data Retention & Cleanup
+    CleanupModule,
   ],
 })
 export class AppModule {}

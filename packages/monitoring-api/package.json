@@ -84,11 +84,13 @@
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/swagger": "^11.2.5",
     "bull": "^4.16.5",
     "ioredis": "^5.9.2",
     "nodemailer": "^7.0.12",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
+    "swagger-ui-express": "^5.0.1",
     "tslib": "^2.3.0"
   },
   "devDependencies": {

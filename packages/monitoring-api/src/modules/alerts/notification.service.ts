@@ -1,5 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { Logger } from '@dex-monit/observability-logger';
+import { EmailService } from './email.service.js';
+import { PagerDutyService, TeamsService, TelegramService } from './channels/index.js';
 import type { AlertAction } from './alert-rules.service.js';
 import type { Issue, AlertRule } from '@prisma/client';
 
@@ -9,11 +11,31 @@ export interface NotificationPayload {
   message: string;
   issue?: Issue;
   rule: AlertRule;
+  // Extended fields for integrations
+  level?: string;
+  type?: string;
+  projectId?: string;
+  projectName?: string;
+  environment?: string;
+  fingerprint?: string;
+  issueId?: string;
+  issueUrl?: string;
+  count?: number;
+  usersAffected?: number;
+  firstSeen?: string;
+  lastSeen?: string;
+  stackTrace?: string;
 }
 
 @Injectable()
 export class NotificationService {
-  constructor(@Inject(Logger) private readonly logger: Logger) {}
+  constructor(
+    @Inject(Logger) private readonly logger: Logger,
+    private readonly emailService: EmailService,
+    private readonly pagerDutyService: PagerDutyService,
+    private readonly teamsService: TeamsService,
+    private readonly telegramService: TelegramService,
+  ) {}
 
   async send(action: AlertAction, payload: NotificationPayload): Promise<void> {
     switch (action.type) {
@@ -28,6 +50,15 @@ export class NotificationService {
         break;
       case 'discord':
         await this.sendDiscord(action.config, payload);
+        break;
+      case 'pagerduty':
+        await this.sendPagerDuty(action.config, payload);
+        break;
+      case 'teams':
+        await this.sendTeams(action.config, payload);
+        break;
+      case 'telegram':
+        await this.sendTelegram(action.config, payload);
         break;
       default:
         this.logger.warn('Unknown notification type', { type: action.type });
@@ -113,18 +144,20 @@ export class NotificationService {
       throw new Error('Email recipients are required');
     }
 
-    // TODO: Implement email sending (using nodemailer, SendGrid, etc.)
-    this.logger.info('Email notification would be sent', {
+    // Check if email service is available
+    if (!this.emailService.isAvailable()) {
+      this.logger.warn('Email service not configured, skipping notification', {
+        alertId: payload.alertId,
+        to,
+      });
+      return;
+    }
+
+    await this.emailService.sendAlertNotification(to, payload);
+    this.logger.info('Email notification sent', {
       alertId: payload.alertId,
       to,
     });
-
-    // Placeholder - implement with actual email service
-    // await this.emailService.send({
-    //   to,
-    //   subject: payload.title,
-    //   html: this.buildEmailHtml(payload),
-    // });
   }
 
   /**
@@ -265,5 +298,91 @@ export class NotificationService {
       DEBUG: 0x808080,
     };
     return colors[level || 'ERROR'] || 0xff0000;
+  }
+
+  /**
+   * Send PagerDuty notification
+   */
+  private async sendPagerDuty(
+    config: Record<string, unknown>,
+    payload: NotificationPayload,
+  ): Promise<void> {
+    const routingKey = config['routingKey'] as string;
+    const severity = config['severity'] as 'critical' | 'error' | 'warning' | 'info' | undefined;
+
+    if (!routingKey) {
+      throw new Error('PagerDuty routing key is required');
+    }
+
+    const enrichedPayload = this.enrichPayload(payload);
+    await this.pagerDutyService.sendAlert(
+      { routingKey, severity },
+      enrichedPayload,
+    );
+
+    this.logger.info('PagerDuty notification sent', { alertId: payload.alertId });
+  }
+
+  /**
+   * Send Microsoft Teams notification
+   */
+  private async sendTeams(
+    config: Record<string, unknown>,
+    payload: NotificationPayload,
+  ): Promise<void> {
+    const webhookUrl = config['webhookUrl'] as string;
+
+    if (!webhookUrl) {
+      throw new Error('Teams webhook URL is required');
+    }
+
+    const enrichedPayload = this.enrichPayload(payload);
+    await this.teamsService.sendAlert({ webhookUrl }, enrichedPayload);
+
+    this.logger.info('Teams notification sent', { alertId: payload.alertId });
+  }
+
+  /**
+   * Send Telegram notification
+   */
+  private async sendTelegram(
+    config: Record<string, unknown>,
+    payload: NotificationPayload,
+  ): Promise<void> {
+    const botToken = config['botToken'] as string;
+    const chatId = config['chatId'] as string;
+    const parseMode = config['parseMode'] as 'HTML' | 'MarkdownV2' | undefined;
+
+    if (!botToken || !chatId) {
+      throw new Error('Telegram bot token and chat ID are required');
+    }
+
+    const enrichedPayload = this.enrichPayload(payload);
+    await this.telegramService.sendAlert(
+      { botToken, chatId, parseMode },
+      enrichedPayload,
+    );
+
+    this.logger.info('Telegram notification sent', {
+      alertId: payload.alertId,
+      chatId,
+    });
+  }
+
+  /**
+   * Enrich payload with issue data for integrations
+   */
+  private enrichPayload(payload: NotificationPayload): NotificationPayload {
+    const issue = payload.issue;
+    return {
+      ...payload,
+      level: payload.level || issue?.level || 'ERROR',
+      count: payload.count || issue?.eventCount,
+      usersAffected: payload.usersAffected || issue?.userCount,
+      firstSeen: payload.firstSeen || issue?.firstSeen?.toISOString(),
+      lastSeen: payload.lastSeen || issue?.lastSeen?.toISOString(),
+      fingerprint: payload.fingerprint || issue?.fingerprint,
+      issueId: payload.issueId || issue?.id,
+    };
   }
 }

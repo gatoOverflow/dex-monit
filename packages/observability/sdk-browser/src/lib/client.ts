@@ -5,6 +5,7 @@ import type {
   StackFrame,
   Severity,
 } from './types';
+import { initWebVitals, type WebVitalsMetric } from './web-vitals';
 
 // ============================================================================
 // Types
@@ -22,6 +23,7 @@ export interface DexBrowserConfig {
   captureUnhandledRejections?: boolean;
   captureGlobalErrors?: boolean;
   sessionTracking?: boolean;
+  webVitals?: boolean;
   beforeSend?: (event: ErrorEvent) => ErrorEvent | null;
 }
 
@@ -61,6 +63,7 @@ interface DexState {
   originalConsole: Partial<Console> | null;
   originalOnError: ErrorHandler | null;
   originalOnUnhandledRejection: RejectionHandler | null;
+  webVitalsCleanup: (() => void) | null;
 }
 
 // ============================================================================
@@ -78,6 +81,7 @@ const state: DexState = {
   originalConsole: null,
   originalOnError: null,
   originalOnUnhandledRejection: null,
+  webVitalsCleanup: null,
 };
 
 // ============================================================================
@@ -110,6 +114,7 @@ export function init(config: DexBrowserConfig): void {
     captureUnhandledRejections: true,
     captureGlobalErrors: true,
     sessionTracking: true,
+    webVitals: true,
     ...config,
   };
 
@@ -128,6 +133,9 @@ export function init(config: DexBrowserConfig): void {
     }
     if (state.config.sessionTracking) {
       startSession();
+    }
+    if (state.config.webVitals) {
+      setupWebVitals();
     }
   }
 
@@ -654,6 +662,61 @@ function setupUnhandledRejectionHandler(): void {
   };
 }
 
+function setupWebVitals(): void {
+  if (typeof window === 'undefined') return;
+
+  state.webVitalsCleanup = initWebVitals({
+    onMetric: (metric: WebVitalsMetric) => {
+      if (!state.config) return;
+
+      // Add breadcrumb for the metric
+      addBreadcrumb({
+        category: 'web-vitals',
+        message: `${metric.name}: ${metric.value.toFixed(2)} (${metric.rating})`,
+        level: metric.rating === 'poor' ? 'warning' : 'info',
+        data: {
+          name: metric.name,
+          value: metric.value,
+          rating: metric.rating,
+          delta: metric.delta,
+          navigationType: metric.navigationType,
+        },
+      });
+
+      // Send metric to backend
+      fetch(`${state.config.apiUrl}/ingest/metrics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Dex-Key': state.config.apiKey,
+        },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          name: `webvitals.${metric.name.toLowerCase()}`,
+          value: metric.value,
+          tags: {
+            ...state.tags,
+            rating: metric.rating,
+            navigation_type: metric.navigationType,
+          },
+          sessionId: state.sessionId,
+          environment: state.config.environment,
+        }),
+      }).catch(() => {
+        // Silently fail
+      });
+
+      if (state.config.debug) {
+        console.log(`[DexMonitoring] Web Vital: ${metric.name}`, {
+          value: metric.value,
+          rating: metric.rating,
+        });
+      }
+    },
+    reportAllChanges: false,
+  });
+}
+
 function setupConsoleCapture(): void {
   if (typeof console === 'undefined') return;
 
@@ -716,6 +779,12 @@ export function close(): void {
   if (state.heartbeatInterval) {
     clearInterval(state.heartbeatInterval);
     state.heartbeatInterval = null;
+  }
+
+  // Stop web vitals collection
+  if (state.webVitalsCleanup) {
+    state.webVitalsCleanup();
+    state.webVitalsCleanup = null;
   }
 
   // Restore original error handlers
