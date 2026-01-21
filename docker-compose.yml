@@ -75,12 +75,10 @@ services:
       JWT_SECRET: dev-secret-key-change-in-production-min-32-chars
       JWT_EXPIRES_IN: 7d
       CLICKHOUSE_ENABLED: "true"
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_HOST: http://clickhouse:8123
       CLICKHOUSE_DATABASE: dex_monitoring
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: ""
-      CLICKHOUSE_PROTOCOL: http
       REDIS_ENABLED: "true"
       REDIS_HOST: redis
       REDIS_PORT: 6379
