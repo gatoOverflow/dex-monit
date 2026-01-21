@@ -14,6 +14,7 @@ interface ErrorTrendData {
   timestamp: string;
   errors: number;
   warnings: number;
+  [key: string]: string | number;
 }
 
 interface ErrorTrendChartProps {

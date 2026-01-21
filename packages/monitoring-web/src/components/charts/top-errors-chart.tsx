@@ -15,6 +15,7 @@ interface TopErrorData {
   name: string;
   count: number;
   level: string;
+  [key: string]: string | number;
 }
 
 interface TopErrorsChartProps {
