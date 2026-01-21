@@ -12,6 +12,9 @@
 
 .PHONY: help dev dev-apps dev-db prod prod-apps build clean logs ps stop restart
 
+# Detect docker compose command ($(DOCKER_COMPOSE) vs docker compose)
+DOCKER_COMPOSE := $(shell command -v $(DOCKER_COMPOSE) 2> /dev/null || echo "docker compose")
+
 # Default target
 help:
 	@echo ""
@@ -53,12 +56,12 @@ help:
 # Start everything locally (full stack)
 dev:
 	@echo "Starting full development stack..."
-	docker-compose up --build
+	$(DOCKER_COMPOSE) up --build
 
 # Start only databases
 dev-db:
 	@echo "Starting databases only..."
-	docker-compose up -d postgres clickhouse redis
+	$(DOCKER_COMPOSE) up -d postgres clickhouse redis
 	@echo ""
 	@echo "Databases running:"
 	@echo "  PostgreSQL: localhost:5432"
@@ -69,7 +72,7 @@ dev-db:
 dev-apps:
 	@echo "Starting API and Web only..."
 	@echo "Make sure your .env file is configured with external database URLs"
-	docker-compose up --build api web
+	$(DOCKER_COMPOSE) up --build api web
 
 # ==============================================================================
 # PRODUCTION
@@ -78,7 +81,7 @@ dev-apps:
 # Build and start all services for production
 prod:
 	@echo "Building and starting production stack..."
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE).yml -f $(DOCKER_COMPOSE).prod.yml up --build -d
 	@echo ""
 	@echo "Production stack running:"
 	@echo "  API: http://localhost:3000"
@@ -88,7 +91,7 @@ prod:
 prod-apps:
 	@echo "Building and starting production apps only..."
 	@echo "Make sure your .env file is configured with external database URLs"
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d api web
+	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE).yml -f $(DOCKER_COMPOSE).prod.yml up --build -d api web
 
 # ==============================================================================
 # BUILD & MANAGEMENT
@@ -97,12 +100,12 @@ prod-apps:
 # Build images
 build:
 	@echo "Building Docker images..."
-	docker-compose build
+	$(DOCKER_COMPOSE) build
 
 # Stop all containers
 stop:
 	@echo "Stopping all containers..."
-	docker-compose down
+	$(DOCKER_COMPOSE) down
 
 # Restart containers
 restart: stop dev
@@ -110,25 +113,25 @@ restart: stop dev
 # Clean everything (containers, volumes, images)
 clean:
 	@echo "Cleaning up..."
-	docker-compose down -v --rmi local
+	$(DOCKER_COMPOSE) down -v --rmi local
 	@echo "Cleanup complete"
 
 # View logs
 logs:
-	docker-compose logs -f
+	$(DOCKER_COMPOSE) logs -f
 
 logs-api:
-	docker-compose logs -f api
+	$(DOCKER_COMPOSE) logs -f api
 
 logs-web:
-	docker-compose logs -f web
+	$(DOCKER_COMPOSE) logs -f web
 
 logs-db:
-	docker-compose logs -f postgres clickhouse redis
+	$(DOCKER_COMPOSE) logs -f postgres clickhouse redis
 
 # List containers
 ps:
-	docker-compose ps
+	$(DOCKER_COMPOSE) ps
 
 # ==============================================================================
 # DATABASE
@@ -137,7 +140,7 @@ ps:
 # Run Prisma migrations
 db-migrate:
 	@echo "Running database migrations..."
-	docker-compose exec api npx prisma db push
+	$(DOCKER_COMPOSE) exec api npx prisma db push
 
 # Open Prisma Studio
 db-studio:
@@ -148,10 +151,10 @@ db-studio:
 db-reset:
 	@echo "WARNING: This will delete all data!"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
-	docker-compose down -v
-	docker-compose up -d postgres
+	$(DOCKER_COMPOSE) down -v
+	$(DOCKER_COMPOSE) up -d postgres
 	sleep 5
-	docker-compose exec api npx prisma db push --force-reset
+	$(DOCKER_COMPOSE) exec api npx prisma db push --force-reset
 
 # ==============================================================================
 # CONFIGURATION
@@ -213,10 +216,10 @@ health:
 	@curl -s http://localhost:3000/api/health || echo "  Not running"
 	@echo ""
 	@echo "PostgreSQL:"
-	@docker-compose exec -T postgres pg_isready -U dex -d dex_monitoring || echo "  Not running"
+	@$(DOCKER_COMPOSE) exec -T postgres pg_isready -U dex -d dex_monitoring || echo "  Not running"
 	@echo ""
 	@echo "ClickHouse:"
 	@curl -s http://localhost:8123/ping || echo "  Not running"
 	@echo ""
 	@echo "Redis:"
-	@docker-compose exec -T redis redis-cli ping || echo "  Not running"
+	@$(DOCKER_COMPOSE) exec -T redis redis-cli ping || echo "  Not running"
